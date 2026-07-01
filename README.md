@@ -1,8 +1,18 @@
 # Codex Voice
 
+<p align="center">
+  <img src="docs/illustrations/01-framework-codex-voice-hero.svg" alt="Codex Voice hero diagram showing the /voice command, side-channel listener, and spoken summary flow." width="100%" />
+</p>
+
 Codex Voice is a Codex plugin that adds a native `/voice` command for per-thread spoken summaries and adjacent side-channel input. Pair it with OpenScreech for a versatile, customizable STT utility and Supertonic for local TTS; ElevenLabs is supported as a hosted TTS alternative.
 
 Normal main-thread input remains the primary command path. When voice is active, Codex keeps technical work in the thread and speaks concise summaries of main-thread replies. External STT/PTT clients can post adjacent questions or notes to the displayed local endpoint without interrupting active main-thread work.
+
+<p align="center">
+  <img src="docs/illustrations/02-infographic-spoken-summaries.svg" alt="Feature card for spoken summaries." width="31%" />
+  <img src="docs/illustrations/03-infographic-side-channel.svg" alt="Feature card for adjacent side-channel STT." width="31%" />
+  <img src="docs/illustrations/04-infographic-tts-routing.svg" alt="Feature card for local-first TTS routing." width="31%" />
+</p>
 
 ## Status
 
