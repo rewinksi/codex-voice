@@ -1,5 +1,6 @@
 import { constants } from "node:fs";
 import { access, chmod, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 
 import {
   ensureVoiceDir,
@@ -136,6 +137,12 @@ export async function ensureSettings(options = {}) {
   const raw = await readFile(settingsPath, "utf8");
   const settings = mergeDefaults(DEFAULT_SETTINGS, JSON.parse(raw));
   return { settings, settingsPath, created };
+}
+
+export function settingsSignature(settings) {
+  return createHash("sha256")
+    .update(JSON.stringify(settings || {}))
+    .digest("hex");
 }
 
 export function parseVoiceEnv(raw) {

@@ -186,6 +186,7 @@ The listener must bind side-channel messages to the exact thread that ran `/voic
 Side-channel path:
 
 - The `/voice` MCP tool resolves and stores the current thread id at activation.
+- Active sessions store a settings signature. If `/voice on` sees a live session with stale settings, it restarts that listener on the same port with the current settings template.
 - Incoming endpoint STT is appended to `~/.codex/voice/side-channel.jsonl` with timestamp, route, thread id, thread name, port, and text.
 - The HTTP response acknowledges receipt with `"Side-channel message received."`.
 - The listener immediately speaks a short varied acknowledgement phrase, starts the LM Studio sidecar at the same time, then leaves a short breath before speaking the answer. Ollama and a slower read-only `codex exec` sidecar can be selected in settings when preferred.

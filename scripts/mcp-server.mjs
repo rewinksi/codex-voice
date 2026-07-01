@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { getLogsDir, getRuntimeSessionPath } from "./lib/paths.mjs";
-import { ensureSettings } from "./lib/settings.mjs";
+import { ensureSettings, settingsSignature } from "./lib/settings.mjs";
 import {
   allocateSession,
   loadSessions,
@@ -194,6 +194,18 @@ async function voiceOn(args, deps) {
   const current = registry.sessions[thread.threadId];
   const isProcessAlive = deps.isProcessAlive || defaultIsProcessAlive;
   if (current?.active && current.pid && isProcessAlive(current.pid)) {
+    if (current.settingsSignature !== settingsSignature(settings)) {
+      await (deps.stopProcess || defaultStopProcess)(current.pid);
+      let refreshed = await allocateSession(options, thread, settings);
+      const started = await (deps.startListener || defaultStartListener)({ options, session: refreshed, settings });
+      refreshed = await setSessionPid(options, thread.threadId, started.pid ?? null);
+      const text = [
+        `Voice listener endpoint: ${refreshed.endpoint}`,
+        `Voice refreshed for ${refreshed.threadName}`,
+        `TTS provider: ${tts.provider} (${tts.ready ? "ready" : "needs setup"})`,
+      ].join("\n");
+      return textResult(text, { session: refreshed, tts, refreshed: true });
+    }
     const text = [
       `Voice listener endpoint: ${current.endpoint}`,
       `Voice already online for ${current.threadName}`,

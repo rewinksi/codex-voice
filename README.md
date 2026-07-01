@@ -54,6 +54,8 @@ Start a new Codex thread after installing or reinstalling so the `/voice` comman
 
 The default listener host is `127.0.0.1`, and ports start at `6901`.
 
+Active listeners inherit the current `settings.json` template when they start. If `/voice on` finds an already-running listener with an older settings signature, it refreshes that listener on the same port so behaviour stays consistent across simultaneous side channels.
+
 ## STT Endpoint
 
 `/voice on` prints the endpoint first:

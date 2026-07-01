@@ -7,6 +7,7 @@ import test from "node:test";
 
 import { handleMcpRequest } from "../scripts/mcp-server.mjs";
 import { loadSessions } from "../scripts/lib/sessions.mjs";
+import { ensureSettings, saveSettings } from "../scripts/lib/settings.mjs";
 
 function sqlite(args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -194,6 +195,71 @@ test("codex_voice_on reuses an already active listener for the same thread", asy
     assert.ifError(second.error);
     assert.equal(starts, 1);
     assert.match(second.result.content[0].text, /Voice already online for Alpha/);
+  } finally {
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
+test("codex_voice_on refreshes active listeners when settings change", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-mcp-refresh-"));
+  const startedSettings = [];
+  const stoppedPids = [];
+  let nextPid = 100;
+  try {
+    const deps = {
+      codexHome,
+      startListener: async ({ settings }) => {
+        startedSettings.push(settings);
+        nextPid += 1;
+        return { pid: nextPid, alreadyRunning: false };
+      },
+      stopProcess: async (pid) => {
+        stoppedPids.push(pid);
+        return { stopped: true, pid };
+      },
+      isProcessAlive: () => true,
+      fetch: async () => ({ status: 404 }),
+    };
+
+    await handleMcpRequest(
+      {
+        id: 42,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_on",
+          arguments: { threadId: "thread-a", threadName: "Alpha" },
+        },
+      },
+      deps,
+    );
+
+    const { settings } = await ensureSettings({ codexHome });
+    settings.sideChannel.acknowledgementWords = ["Sweet as"];
+    settings.sideChannel.maxContextChars = 600;
+    await saveSettings({ codexHome }, settings);
+
+    const second = await handleMcpRequest(
+      {
+        id: 43,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_on",
+          arguments: { threadId: "thread-a", threadName: "Alpha" },
+        },
+      },
+      deps,
+    );
+
+    assert.ifError(second.error);
+    assert.equal(startedSettings.length, 2);
+    assert.deepEqual(stoppedPids, [101]);
+    assert.match(second.result.content[0].text, /Voice refreshed for Alpha/);
+    assert.deepEqual(startedSettings.at(-1).sideChannel.acknowledgementWords, ["Sweet as"]);
+
+    const registry = await loadSessions({ codexHome });
+    assert.equal(registry.sessions["thread-a"].port, 6901);
+    assert.equal(registry.sessions["thread-a"].pid, 102);
+    assert.equal(typeof registry.sessions["thread-a"].settingsSignature, "string");
   } finally {
     await rm(codexHome, { recursive: true, force: true });
   }

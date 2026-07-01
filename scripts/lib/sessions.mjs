@@ -5,6 +5,7 @@ import {
   ensureVoiceDir,
   getSessionsPath,
 } from "./paths.mjs";
+import { settingsSignature } from "./settings.mjs";
 
 const EMPTY_REGISTRY = {
   version: 1,
@@ -86,6 +87,7 @@ export async function allocateSession(options = {}, thread, settings) {
     endpoint: endpointFor(settings, port),
     active: true,
     pid: thread.pid ?? null,
+    settingsSignature: settingsSignature(settings),
     createdAt: registry.sessions[thread.threadId]?.createdAt || now,
     updatedAt: now,
   };
