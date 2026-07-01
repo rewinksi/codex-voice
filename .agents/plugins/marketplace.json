@@ -16,7 +16,7 @@
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity",
-      "description": "Native /voice side-channel for Codex threads. Pair with OpenScreech for customizable STT and Supertonic for local TTS, or use ElevenLabs as a hosted TTS alternative."
+      "description": "Native /voice spoken summaries plus side-channel input for Codex threads. Pair with OpenScreech for customizable STT and Supertonic for local TTS, or use ElevenLabs as a hosted TTS alternative."
     }
   ]
 }

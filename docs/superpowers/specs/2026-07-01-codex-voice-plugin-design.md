@@ -2,13 +2,13 @@
 
 ## Goal
 
-Build a distributable Codex plugin that adds a native `/voice` command to any Codex thread. When enabled, it creates a per-thread voice side-channel: external STT posts text to a local OpenAI-compatible endpoint, Codex receives those commands in the bound thread, and Codex can answer concisely over a configured TTS provider while leaving technical work in the thread.
+Build a distributable Codex plugin that adds a native `/voice` command to any Codex thread. When enabled, it creates concise spoken summaries for normal main-thread work and a separate per-thread side-channel endpoint for adjacent STT input. External STT posts to the endpoint must not start, steer, or interrupt the main Codex thread.
 
 ## Scope
 
 This is a full plugin, not a standalone skill. The plugin packages native slash-command files, a voice operating skill, an MCP server for `/voice` tools, local listener scripts, settings/secrets handling, tests, and marketplace-ready metadata.
 
-The plugin is local-first. It does not capture microphone audio itself. The user intentionally wires an external STT/PTT provider to the displayed listener endpoint for the intended thread.
+The plugin is local-first. It does not capture microphone audio itself. The user's primary PTT path may inject text directly into the main Codex composer. The displayed listener endpoint is reserved for adjacent side-channel questions or notes that should not interrupt the work happening in the main thread.
 
 ## Native Command Behavior
 
@@ -31,6 +31,8 @@ After the endpoint is visible, Codex may print concise setup status and speak:
 ```text
 Voice online for <thread name>
 ```
+
+While voice is active, Codex should answer normal main-thread user messages in the thread as usual and call `codex_voice_say` with a short spoken summary after substantive replies. Spoken summaries must avoid code, logs, diffs, long command output, and secrets.
 
 ## Port And Session Model
 
@@ -105,6 +107,7 @@ ElevenLabs setup:
 - If either is missing, `/voice on` reports exactly which fields are missing and asks the user for the voice name and key.
 - The key is saved only in `voice_env`, never in `settings.json`, logs, or thread text.
 - Speaking resolves the configured voice name through ElevenLabs voices, then calls the text-to-speech endpoint with the configured model and output format.
+- ElevenLabs offers streaming TTS options. A future latency-focused implementation should prefer streaming playback for ElevenLabs instead of waiting for full audio before starting local playback.
 
 ## STT Listener Contract
 
@@ -120,7 +123,7 @@ Accepted payload shapes:
 - Direct transcription style: `{ "text": "..." }`
 - Transcript style: `{ "transcript": "..." }`
 
-The listener extracts the user's text, rejects empty input, and forwards the command to the bound Codex thread.
+The listener extracts the user's text, rejects empty input, records the message to the local side-channel inbox, and returns an OpenAI-compatible acknowledgement. It must not forward endpoint text into the main Codex thread.
 
 The listener also exposes:
 
@@ -131,21 +134,22 @@ GET /v1/models
 
 These endpoints support external STT client setup and simple health checks.
 
-## Codex Thread Injection
+## Side-Channel Handling
 
-The listener must deliver STT text to the exact thread that ran `/voice on`.
+The listener must bind side-channel messages to the exact thread that ran `/voice on`, but it must not inject those messages into the main thread.
 
-Preferred path:
+Side-channel path:
 
 - The `/voice` MCP tool resolves and stores the current thread id at activation.
-- Incoming STT uses Codex app-server APIs to send `turn/start` when the thread is idle or `turn/steer` when the active turn is steerable.
+- Incoming endpoint STT is appended to `~/.codex/voice/side-channel.jsonl` with timestamp, route, thread id, thread name, port, and text.
+- The HTTP response acknowledges receipt with `"Side-channel message received."`.
 
-Fallback path:
+Main-thread path:
 
-- If app-server transport is unavailable, the plugin stores the received command in the session inbox and returns a clear `503` explaining that the Codex bridge is not connected.
-- The session state remains visible through `/voice status`.
+- Normal main-thread messages are handled by Codex normally.
+- While voice is active, Codex calls `codex_voice_say` to speak a concise summary of the main-thread reply.
 
-Implementation must prove thread injection with a small smoke test before claiming end-to-end voice control.
+Implementation must prove that endpoint STT does not call `turn/start`, `turn/steer`, or any Codex app-server injection path.
 
 ## Security
 
@@ -182,6 +186,7 @@ Minimum verification before completion:
 - Missing ElevenLabs secrets are detected without leaking values.
 - Supertonic discovery persists non-secret settings.
 - Listener accepts OpenAI-compatible STT payloads.
+- Listener records endpoint payloads as side-channel messages without main-thread injection.
 - Listener health endpoints work.
+- `codex_voice_say` speaks summaries only for active voice sessions.
 - `/voice off` stops the listener and releases the active session.
-- Thread injection proof is run or reported as blocked with exact evidence.

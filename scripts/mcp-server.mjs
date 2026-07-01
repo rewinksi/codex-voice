@@ -18,7 +18,7 @@ import { resolveTtsProvider, speakText } from "./lib/tts.mjs";
 
 const SERVER_INFO = {
   name: "codex-voice",
-  version: "0.1.3",
+  version: "0.1.4",
 };
 
 const TOOL_DEFS = [
@@ -54,6 +54,19 @@ const TOOL_DEFS = [
         threadId: { type: "string", description: "Current Codex thread id." },
         cwd: { type: "string", description: "Current thread working directory." },
       },
+    },
+  },
+  {
+    name: "codex_voice_say",
+    description: "Speak a concise voice summary for the current thread when Codex Voice is active.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        threadId: { type: "string", description: "Current Codex thread id." },
+        cwd: { type: "string", description: "Current thread working directory." },
+        text: { type: "string", description: "Short spoken summary. Do not include secrets, code, logs, or long output." },
+      },
+      required: ["text"],
     },
   },
 ];
@@ -225,11 +238,35 @@ async function voiceOff(args, deps) {
   );
 }
 
+async function voiceSay(args, deps) {
+  const text = String(args.text || "").trim();
+  if (!text) throw new Error("codex_voice_say requires non-empty text");
+
+  const options = { codexHome: deps.codexHome };
+  const thread = await resolveThread(args, deps);
+  const registry = await loadSessions(options);
+  const session = registry.sessions[thread.threadId];
+  if (!session?.active) {
+    return textResult(`Voice is inactive for ${thread.threadName}; summary not spoken.`, {
+      spoken: false,
+      reason: "voice-inactive",
+    });
+  }
+
+  const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env });
+  const spoken = await speakText(text, tts, { fetch: deps.fetch, player: deps.player });
+  return textResult(
+    `Spoken summary for ${session.threadName}: ${spoken.spoken ? "ok" : spoken.reason}`,
+    { session, tts, spoken },
+  );
+}
+
 async function callTool(params, deps) {
   const args = params.arguments || {};
   if (params.name === "codex_voice_on") return voiceOn(args, deps);
   if (params.name === "codex_voice_off") return voiceOff(args, deps);
   if (params.name === "codex_voice_status") return voiceStatus(args, deps);
+  if (params.name === "codex_voice_say") return voiceSay(args, deps);
   throw new Error(`Unknown Codex Voice tool: ${params.name}`);
 }
 

@@ -25,6 +25,9 @@ Voice listener endpoint: <endpoint>
 
 3. After that line, summarize readiness in one or two short lines.
 4. If setup needs ElevenLabs details, ask for the missing fields only. Ask for the API key to be provided as a local secret; do not ask the user to paste it into ordinary prose unless the tool explicitly supports secret capture.
+5. While voice is active, after each substantive response to a normal main-thread user message, call `codex_voice_say` with a short spoken summary. Do not speak code, logs, secrets, or long technical detail.
+
+The displayed endpoint is for adjacent side-channel input only. Do not route endpoint text into `turn/start` or `turn/steer`, and do not treat it as the user's primary main-thread command path.
 
 ### `/voice off`
 
@@ -35,6 +38,10 @@ Voice listener endpoint: <endpoint>
 
 1. Call the `codex_voice_status` MCP tool.
 2. Report the endpoint, active provider, thread binding, and any missing setup.
+
+### Spoken summaries
+
+When the current thread has an active voice session, call `codex_voice_say` after normal thread replies with one or two concise sentences that capture the useful conversational response. Keep the thread as the durable technical record and keep the spoken output brief.
 
 ## Verification
 

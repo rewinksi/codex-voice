@@ -37,7 +37,7 @@ test("MCP tools/list exposes voice lifecycle tools", async () => {
   assert.equal(response.jsonrpc, "2.0");
   assert.deepEqual(
     response.result.tools.map((tool) => tool.name),
-    ["codex_voice_on", "codex_voice_off", "codex_voice_status"],
+    ["codex_voice_on", "codex_voice_off", "codex_voice_status", "codex_voice_say"],
   );
 });
 
@@ -204,6 +204,68 @@ test("codex_voice_status and codex_voice_off inspect and stop the thread session
 
     const registry = await loadSessions({ codexHome });
     assert.equal(registry.sessions["thread-a"].active, false);
+  } finally {
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
+test("codex_voice_say speaks a concise main-thread summary for an active voice session", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-mcp-say-"));
+  const played = [];
+  const fetchCalls = [];
+  try {
+    await handleMcpRequest(
+      {
+        id: 30,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_on",
+          arguments: { threadId: "thread-a", threadName: "Alpha" },
+        },
+      },
+      {
+        codexHome,
+        startListener: async () => ({ pid: 45678 }),
+        fetch: async () => ({ status: 404 }),
+      },
+    );
+
+    const response = await handleMcpRequest(
+      {
+        id: 31,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_say",
+          arguments: {
+            threadId: "thread-a",
+            text: "Tests passed; I am updating the docs now.",
+          },
+        },
+      },
+      {
+        codexHome,
+        fetch: async (url, options = {}) => {
+          fetchCalls.push({ url: String(url), options });
+          return {
+            ok: true,
+            status: 200,
+            arrayBuffer: async () => Buffer.from("audio").buffer,
+          };
+        },
+        player: async (audioPath) => {
+          played.push(audioPath);
+        },
+      },
+    );
+
+    assert.ifError(response.error);
+    assert.match(response.result.content[0].text, /Spoken summary for Alpha/);
+    assert.equal(played.length, 1);
+    assert.ok(fetchCalls.some((call) => call.url.includes("/v1/tts")));
+    assert.equal(
+      JSON.parse(fetchCalls.find((call) => call.url.includes("/v1/tts")).options.body).text,
+      "Tests passed; I am updating the docs now.",
+    );
   } finally {
     await rm(codexHome, { recursive: true, force: true });
   }

@@ -4,7 +4,7 @@
 
 **Goal:** Build a native Codex `/voice` plugin with per-thread local STT listener endpoints and configurable Supertonic or ElevenLabs TTS.
 
-**Architecture:** The plugin root contains native command files, a voice skill, an MCP stdio server, and Node scripts. `/voice on` calls the MCP tool, which creates settings, allocates a port, starts a detached listener, and returns the endpoint. The listener normalizes STT payloads and forwards them through a Codex bridge interface.
+**Architecture:** The plugin root contains native command files, a voice skill, an MCP stdio server, and Node scripts. `/voice on` calls the MCP tool, which creates settings, allocates a port, starts a detached listener, and returns the endpoint. The listener normalizes STT payloads and records them as adjacent side-channel input without injecting into the main thread; active main-thread replies use `codex_voice_say` for concise spoken summaries.
 
 **Tech Stack:** Node.js ESM, built-in `node:test`, built-in HTTP server, stdio JSON-RPC MCP shim, Codex plugin manifest, local JSON settings.
 
@@ -21,7 +21,7 @@
 - `scripts/lib/sessions.mjs`: session registry and priority port allocation.
 - `scripts/lib/tts.mjs`: Supertonic and ElevenLabs provider validation plus speaking.
 - `scripts/lib/stt.mjs`: OpenAI-compatible STT payload parsing.
-- `scripts/lib/codex-bridge.mjs`: Codex app-server bridge interface.
+- `scripts/lib/side-channel.mjs`: side-channel inbox writer.
 - `scripts/voice-listener.mjs`: per-thread HTTP listener.
 - `scripts/mcp-server.mjs`: MCP tools for `voice_on`, `voice_off`, and `voice_status`.
 - `tests/*.test.mjs`: unit and integration tests.
@@ -73,14 +73,14 @@
 
 **Files:**
 - Create: `scripts/lib/stt.mjs`
-- Create: `scripts/lib/codex-bridge.mjs`
+- Create: `scripts/lib/side-channel.mjs`
 - Create: `scripts/voice-listener.mjs`
 - Create: `tests/stt.test.mjs`
 - Create: `tests/listener.test.mjs`
 
 - [ ] Write failing tests for OpenAI payload parsing and listener health/chat endpoints.
 - [ ] Run: `npm test -- tests/stt.test.mjs tests/listener.test.mjs` and confirm failure.
-- [ ] Implement parser, listener server, auth check, and bridge fallback.
+- [ ] Implement parser, listener server, auth check, and side-channel inbox recording.
 - [ ] Run listener tests and confirm pass.
 - [ ] Commit: `git add scripts tests && git commit -m "feat: add voice stt listener"`.
 
@@ -107,6 +107,6 @@
 - [ ] Run all tests: `npm test`.
 - [ ] Run plugin validator.
 - [ ] Smoke-test `voice_on` locally and curl `/healthz`.
-- [ ] Attempt app-server thread injection proof; record exact result.
+- [ ] Prove endpoint input does not call main-thread injection paths; record exact result.
 - [ ] Create public GitHub repository and push.
 - [ ] Commit final docs: `git add . && git commit -m "docs: add codex voice usage"`.

@@ -22,6 +22,10 @@ export function getSessionsPath(options = {}) {
   return path.join(getVoiceDir(options), "sessions.json");
 }
 
+export function getSideChannelPath(options = {}) {
+  return path.join(getVoiceDir(options), "side-channel.jsonl");
+}
+
 export function getLogsDir(options = {}) {
   return path.join(getVoiceDir(options), "logs");
 }

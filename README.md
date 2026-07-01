@@ -1,14 +1,14 @@
 # Codex Voice
 
-Codex Voice is a Codex plugin that adds a native `/voice` command for per-thread voice side-channels. Pair it with OpenScreech for a versatile, customizable STT utility and Supertonic for local TTS; ElevenLabs is supported as a hosted TTS alternative.
+Codex Voice is a Codex plugin that adds a native `/voice` command for per-thread spoken summaries and adjacent side-channel input. Pair it with OpenScreech for a versatile, customizable STT utility and Supertonic for local TTS; ElevenLabs is supported as a hosted TTS alternative.
 
-External STT/PTT clients post transcribed commands to the displayed local endpoint. Codex keeps technical work in the thread and uses the voice channel for concise coordination.
+Normal main-thread input remains the primary command path. When voice is active, Codex keeps technical work in the thread and speaks concise summaries of main-thread replies. External STT/PTT clients can post adjacent questions or notes to the displayed local endpoint without interrupting active main-thread work.
 
 ## Status
 
-This repository contains the plugin scaffold, native `/voice` command, MCP lifecycle tools, per-thread port allocation, settings/secrets handling, TTS provider resolution, local STT listener, Codex app-server bridge client, and Git marketplace metadata for distribution.
+This repository contains the plugin scaffold, native `/voice` command, MCP lifecycle tools, per-thread port allocation, settings/secrets handling, TTS provider resolution, local side-channel STT listener, spoken-summary tool, and Git marketplace metadata for distribution.
 
-The installed plugin path has been smoke-tested locally: `/voice on` starts a listener, speaks the online announcement through Supertonic when available, accepts OpenAI-compatible STT POSTs, and bridges received text into a Codex thread. The Codex app-server bridge lives in `scripts/lib/codex-bridge.mjs`; it initializes `codex app-server`, resumes the bound thread, and uses `turn/start` or `turn/steer` depending on thread state. If the app-server bridge is unavailable, STT posts return `503` with `codex_bridge_unavailable` instead of silently dropping commands.
+The installed plugin path has been smoke-tested locally: `/voice on` starts a listener, speaks the online announcement through Supertonic when available, accepts OpenAI-compatible side-channel STT POSTs, and records them without starting or steering the main Codex thread. Active voice sessions also expose `codex_voice_say` so Codex can speak concise summaries after normal main-thread replies.
 
 ## Install
 
@@ -34,7 +34,7 @@ Start a new Codex thread after installing or reinstalling so the `/voice` comman
 - `/voice off`
 - `/voice status`
 
-`/voice on` must print the listener endpoint as the first visible line. Configure your push-to-talk STT client to send OpenAI-compatible chat completion requests to that endpoint.
+`/voice on` must print the listener endpoint as the first visible line. Configure an adjacent-question push-to-talk STT client to send OpenAI-compatible chat completion requests to that endpoint. Keep your primary main-thread PTT button configured to type or submit directly into Codex.
 
 ## Local Files
 
@@ -73,6 +73,8 @@ GET /healthz
 GET /v1/models
 ```
 
+Endpoint POSTs are side-channel only. They are recorded in `~/.codex/voice/side-channel.jsonl` and acknowledged, but they do not call `turn/start`, `turn/steer`, or otherwise interrupt main-thread work.
+
 ## TTS Providers
 
 Supported providers:
@@ -83,6 +85,10 @@ Supported providers:
 For STT, this plugin expects an external push-to-talk client. OpenScreech is a good pairing when you want a versatile and customizable local STT utility that can target the displayed listener endpoint.
 
 Secrets belong in `voice_env`, not `settings.json`.
+
+## Latency Notes
+
+The fastest perceived loop comes from short spoken summaries, a warm local TTS service, and avoiding long code/log narration. Supertonic is local but currently returns complete audio rather than streaming partial audio. ElevenLabs supports lower-latency hosted models and streaming TTS APIs, including HTTP response streaming and WebSocket input streaming, which are good candidates for a future lower-latency playback path.
 
 ## Development
 

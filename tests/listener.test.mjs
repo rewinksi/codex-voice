@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
-import { createListenerBridge, createVoiceServer } from "../scripts/voice-listener.mjs";
+import { createVoiceServer } from "../scripts/voice-listener.mjs";
 
 function listen(server) {
   return new Promise((resolve) => {
@@ -19,7 +22,6 @@ test("voice listener exposes health and OpenAI-compatible model endpoints", asyn
   const server = createVoiceServer({
     session: { threadId: "thread-a", threadName: "Alpha", port: 0 },
     settings: { host: "127.0.0.1", stt: {} },
-    bridge: { sendText: async () => ({ delivered: true }) },
   });
   const port = await listen(server);
 
@@ -38,17 +40,12 @@ test("voice listener exposes health and OpenAI-compatible model endpoints", asyn
   }
 });
 
-test("voice listener forwards chat completion text to the bridge", async () => {
-  const received = [];
+test("voice listener records side-channel text without injecting into Codex", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-side-channel-"));
   const server = createVoiceServer({
     session: { threadId: "thread-a", threadName: "Alpha", port: 0 },
     settings: { host: "127.0.0.1", stt: {} },
-    bridge: {
-      sendText: async (session, text) => {
-        received.push({ session, text });
-        return { delivered: true, mode: "turn/start" };
-      },
-    },
+    codexHome,
   });
   const port = await listen(server);
 
@@ -61,12 +58,17 @@ test("voice listener forwards chat completion text to the bridge", async () => {
 
     assert.equal(response.status, 200);
     const body = await response.json();
-    assert.equal(body.choices[0].message.content, "Voice command received.");
-    assert.equal(received.length, 1);
-    assert.equal(received[0].text, "what changed?");
-    assert.equal(received[0].session.threadId, "thread-a");
+    assert.equal(body.choices[0].message.content, "Side-channel message received.");
+
+    const logPath = path.join(codexHome, "voice", "side-channel.jsonl");
+    const entry = JSON.parse((await readFile(logPath, "utf8")).trim());
+    assert.equal(entry.threadId, "thread-a");
+    assert.equal(entry.threadName, "Alpha");
+    assert.equal(entry.text, "what changed?");
+    assert.equal(entry.route, "side-channel");
   } finally {
     await close(server);
+    await rm(codexHome, { recursive: true, force: true });
   }
 });
 
@@ -74,7 +76,6 @@ test("voice listener rejects requests without configured bearer token", async ()
   const server = createVoiceServer({
     session: { threadId: "thread-a", threadName: "Alpha", port: 0 },
     settings: { host: "127.0.0.1", stt: { bearerToken: "token-123" } },
-    bridge: { sendText: async () => ({ delivered: true }) },
   });
   const port = await listen(server);
 
@@ -89,13 +90,4 @@ test("voice listener rejects requests without configured bearer token", async ()
   } finally {
     await close(server);
   }
-});
-
-test("createListenerBridge passes session CODEX_HOME to the app-server bridge", () => {
-  const bridgeOptions = createListenerBridge(
-    { codexHome: "/tmp/codex-home-for-test" },
-    (options) => options,
-  );
-
-  assert.equal(bridgeOptions.appServer.env.CODEX_HOME, "/tmp/codex-home-for-test");
 });

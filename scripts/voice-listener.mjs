@@ -2,7 +2,7 @@
 import http from "node:http";
 import { readFile } from "node:fs/promises";
 
-import { createBridge } from "./lib/codex-bridge.mjs";
+import { recordSideChannelMessage } from "./lib/side-channel.mjs";
 import { extractTranscriptText } from "./lib/stt.mjs";
 
 const JSON_HEADERS = {
@@ -39,7 +39,7 @@ function openAiAck() {
         index: 0,
         message: {
           role: "assistant",
-          content: "Voice command received.",
+          content: "Side-channel message received.",
         },
         finish_reason: "stop",
       },
@@ -47,14 +47,7 @@ function openAiAck() {
   };
 }
 
-export function createListenerBridge(data, factory = createBridge) {
-  const env = data?.codexHome
-    ? { ...process.env, CODEX_HOME: data.codexHome }
-    : process.env;
-  return factory({ appServer: { env } });
-}
-
-export function createVoiceServer({ session, settings, bridge = createBridge() }) {
+export function createVoiceServer({ session, settings, codexHome, recorder = recordSideChannelMessage }) {
   return http.createServer(async (request, response) => {
     const url = new URL(request.url || "/", `http://${request.headers.host || "127.0.0.1"}`);
 
@@ -91,17 +84,7 @@ export function createVoiceServer({ session, settings, bridge = createBridge() }
       try {
         const payload = await readJson(request);
         const text = extractTranscriptText(payload);
-        const delivery = await bridge.sendText(session, text);
-
-        if (delivery && delivery.delivered === false) {
-          sendJson(response, 503, {
-            error: {
-              message: delivery.reason || "Codex bridge unavailable",
-              type: "codex_bridge_unavailable",
-            },
-          });
-          return;
-        }
+        await recorder({ codexHome }, session, text);
 
         sendJson(response, 200, openAiAck());
       } catch (error) {
@@ -141,7 +124,7 @@ async function main() {
   const server = createVoiceServer({
     session: data.session,
     settings: data.settings,
-    bridge: createListenerBridge(data),
+    codexHome: data.codexHome,
   });
 
   const host = data.settings.host || "127.0.0.1";
