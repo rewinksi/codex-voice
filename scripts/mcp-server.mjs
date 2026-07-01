@@ -2,7 +2,7 @@
 import { createInterface } from "node:readline";
 import { spawn, execFile } from "node:child_process";
 import { openSync, closeSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,7 +18,7 @@ import { resolveTtsProvider, speakText } from "./lib/tts.mjs";
 
 const SERVER_INFO = {
   name: "codex-voice",
-  version: "0.1.1",
+  version: "0.1.2",
 };
 
 const TOOL_DEFS = [
@@ -67,6 +67,7 @@ function textResult(text, structuredContent = {}) {
 
 function errorResponse(id, error) {
   return {
+    jsonrpc: "2.0",
     id,
     error: {
       code: -32000,
@@ -76,11 +77,20 @@ function errorResponse(id, error) {
 }
 
 async function resolveThread(args = {}, deps = {}) {
+  const env = deps.env || process.env;
   if (args.threadId) {
     return {
       threadId: args.threadId,
       threadName: args.threadName || args.threadId,
       cwd: args.cwd || "",
+    };
+  }
+
+  if (env.CODEX_THREAD_ID) {
+    return {
+      threadId: env.CODEX_THREAD_ID,
+      threadName: args.threadName || env.CODEX_THREAD_TITLE || env.CODEX_THREAD_ID,
+      cwd: args.cwd || env.PWD || "",
     };
   }
 
@@ -96,10 +106,17 @@ function quoteSql(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-export function resolveThreadFromState(cwd, deps = {}) {
+export async function resolveThreadFromState(cwd, deps = {}) {
   const codexHome = deps.codexHome || process.env.CODEX_HOME || path.join(process.env.HOME, ".codex");
   const dbPath = path.join(codexHome, "state_5.sqlite");
-  const sql = `select id,title,cwd from threads where archived=0 and cwd=${quoteSql(cwd)} order by recency_at_ms desc limit 1;`;
+  const candidates = new Set([cwd]);
+  try {
+    candidates.add(await realpath(cwd));
+  } catch {
+    // The original cwd is still worth trying when the directory no longer exists.
+  }
+  const cwdFilter = [...candidates].map(quoteSql).join(",");
+  const sql = `select id,title,cwd from threads where archived=0 and cwd in (${cwdFilter}) order by recency_at_ms desc limit 1;`;
   return new Promise((resolve) => {
     execFile("sqlite3", ["-separator", "\t", dbPath, sql], { timeout: 2000 }, (error, stdout) => {
       if (error || !stdout.trim()) {
@@ -220,6 +237,7 @@ export async function handleMcpRequest(message, deps = {}) {
   try {
     if (message.method === "initialize") {
       return {
+        jsonrpc: "2.0",
         id: message.id,
         result: {
           protocolVersion: "2024-11-05",
@@ -230,11 +248,11 @@ export async function handleMcpRequest(message, deps = {}) {
     }
 
     if (message.method === "tools/list") {
-      return { id: message.id, result: { tools: TOOL_DEFS } };
+      return { jsonrpc: "2.0", id: message.id, result: { tools: TOOL_DEFS } };
     }
 
     if (message.method === "tools/call") {
-      return { id: message.id, result: await callTool(message.params || {}, deps) };
+      return { jsonrpc: "2.0", id: message.id, result: await callTool(message.params || {}, deps) };
     }
 
     if (message.id === undefined) return null;

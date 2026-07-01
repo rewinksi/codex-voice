@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -28,10 +28,83 @@ test("MCP tools/list exposes voice lifecycle tools", async () => {
   });
 
   assert.equal(response.id, 1);
+  assert.equal(response.jsonrpc, "2.0");
   assert.deepEqual(
     response.result.tools.map((tool) => tool.name),
     ["codex_voice_on", "codex_voice_off", "codex_voice_status"],
   );
+});
+
+test("codex_voice_status resolves current thread from CODEX_THREAD_ID", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-mcp-env-thread-"));
+  try {
+    const response = await handleMcpRequest(
+      {
+        id: 7,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_status",
+          arguments: {},
+        },
+      },
+      {
+        codexHome,
+        env: {
+          CODEX_THREAD_ID: "thread-from-env",
+          CODEX_THREAD_TITLE: "Env Thread",
+          PWD: "/tmp/env-thread",
+        },
+      },
+    );
+
+    assert.equal(response.jsonrpc, "2.0");
+    assert.ifError(response.error);
+    assert.match(response.result.content[0].text, /Status: inactive/);
+    assert.match(response.result.content[0].text, /Thread: Env Thread/);
+  } finally {
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
+test("codex_voice_on resolves canonical cwd aliases from Codex state", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-mcp-realpath-"));
+  const project = await mkdtemp(path.join(os.tmpdir(), "codex-voice-project-"));
+  try {
+    const dbPath = path.join(codexHome, "state_5.sqlite");
+    const canonicalProject = await realpath(project);
+    await sqlite([
+      dbPath,
+      "create table threads (id text primary key, title text not null, cwd text not null, archived integer not null, recency_at_ms integer not null);",
+    ]);
+    await sqlite([
+      dbPath,
+      `insert into threads values ('canonical-thread', 'Canonical', '${canonicalProject.replaceAll("'", "''")}', 0, 1);`,
+    ]);
+
+    const response = await handleMcpRequest(
+      {
+        id: 8,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_on",
+          arguments: { cwd: project },
+        },
+      },
+      {
+        codexHome,
+        env: {},
+        startListener: async () => ({ pid: 45678 }),
+        fetch: async () => ({ status: 404 }),
+      },
+    );
+
+    assert.equal(response.jsonrpc, "2.0");
+    assert.ifError(response.error);
+    assert.match(response.result.content[0].text, /Voice online for Canonical/);
+  } finally {
+    await rm(codexHome, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
 });
 
 test("codex_voice_on allocates a session, starts listener, and returns endpoint first", async () => {
@@ -154,6 +227,7 @@ test("codex_voice_on resolves thread id from Codex state when cwd is provided", 
       },
       {
         codexHome,
+        env: {},
         startListener: async () => ({ pid: 34567 }),
         fetch: async () => ({ status: 404 }),
       },

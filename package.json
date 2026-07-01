@@ -1,6 +1,6 @@
 {
   "name": "codex-voice",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Native Codex voice side-channel plugin for OpenScreech STT plus Supertonic or ElevenLabs TTS.",
   "type": "module",
   "private": false,
