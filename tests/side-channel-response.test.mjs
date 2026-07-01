@@ -57,10 +57,10 @@ test("respondToSideChannel speaks a generated side-channel answer", async () => 
   }
 });
 
-test("buildSideChannelAckText references the side-channel subject briefly", () => {
+test("buildSideChannelAckText uses acknowledgement words without subject keywords", () => {
   assert.equal(
     buildSideChannelAckText("Can you check the LM Studio timeout thing?", {}, { random: () => 0.2 }),
-    "Got it: LM Studio.",
+    "Got it.",
   );
   assert.equal(
     buildSideChannelAckText("Um, the side channel is still not answering", {}, { random: () => 0.2 }),
@@ -68,7 +68,7 @@ test("buildSideChannelAckText references the side-channel subject briefly", () =
   );
   assert.equal(
     buildSideChannelAckText("Side channel smoke: is Gemma answering?", {}, { random: () => 0.2 }),
-    "Got it: Gemma.",
+    "Got it.",
   );
 });
 
@@ -81,15 +81,15 @@ test("buildSideChannelAckText varies acknowledgement words from configured optio
 
   assert.equal(
     buildSideChannelAckText("Gemma is answering now", settings, { random: () => 0 }),
-    "Righto: Gemma.",
+    "Righto.",
   );
   assert.equal(
     buildSideChannelAckText("Gemma is answering now", settings, { random: () => 0.5 }),
-    "Sweet as: Gemma.",
+    "Sweet as.",
   );
   assert.equal(
     buildSideChannelAckText("Gemma is answering now", settings, { random: () => 0.99 }),
-    "Mmm, your mother (what?): Gemma.",
+    "Mmm, your mother (what?).",
   );
 });
 
@@ -134,7 +134,7 @@ test("respondToSideChannel leaves a breath between side-channel utterances", asy
     );
 
     assert.deepEqual(spokenTexts, [
-      "Got it: LM Studio.",
+      "Got it.",
       "Timeout is bumped and the ack is cleaner.",
     ]);
     assert.deepEqual(sleeps, [250]);

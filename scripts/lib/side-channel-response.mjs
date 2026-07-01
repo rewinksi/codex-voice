@@ -35,8 +35,7 @@ export async function respondToSideChannel(options = {}, session, settings, text
 
 export function buildSideChannelAckText(text, settings = {}, deps = {}) {
   const acknowledgement = chooseAcknowledgement(settings, deps);
-  const keywords = extractSubjectKeywords(text);
-  return keywords ? `${acknowledgement}: ${keywords}.` : `${acknowledgement}.`;
+  return `${acknowledgement}.`;
 }
 
 export function resetSideChannelSpeechQueueForTests() {
@@ -45,45 +44,6 @@ export function resetSideChannelSpeechQueueForTests() {
 
 function speakSideChannelText(text, tts, settings, deps = {}) {
   return speakQueuedText(text, tts, settings, deps);
-}
-
-function extractSubjectKeywords(text) {
-  const cleaned = String(text || "")
-    .replace(/\bsk-[A-Za-z0-9:_-]+\b/g, " ")
-    .replace(/https?:\/\/\S+/g, " ")
-    .replace(/[`*_~()[\]{}.,!?;:"']/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!cleaned) return "";
-
-  const preferred = [
-    ["LM Studio", /\blm\s+studio\b/i],
-    ["ElevenLabs", /\beleven\s*labs\b/i],
-    ["Supertonic", /\bsupertonic\b/i],
-    ["Gemma", /\bgemma\b/i],
-    ["OpenScreech", /\bopenscreech\b/i],
-    ["timeout", /\btimeouts?\b/i],
-    ["latency", /\blatency\b/i],
-    ["queue", /\bqueue\b/i],
-    ["listener", /\blistener\b/i],
-    ["endpoint", /\bendpoint\b/i],
-    ["voice", /\bvoice\b/i],
-    ["TTS", /\btts\b/i],
-    ["STT", /\bstt\b/i],
-  ];
-  const match = preferred.find(([, pattern]) => pattern.test(cleaned));
-  if (match) return match[0];
-
-  const stopwords = new Set([
-    "a", "an", "and", "are", "as", "at", "be", "but", "can", "could", "for", "from", "get",
-    "got", "have", "how", "i", "is", "it", "just", "me", "of", "on", "or", "please", "say",
-    "answering", "channel", "not", "side", "still", "that", "the", "this", "to", "um", "we", "what", "when", "with", "you",
-  ]);
-  const words = cleaned
-    .split(/\s+/)
-    .filter((word) => word.length > 2 && word.length < 24 && !stopwords.has(word.toLowerCase()))
-    .slice(0, 2);
-  return words.join(" ");
 }
 
 function chooseAcknowledgement(settings, deps = {}) {

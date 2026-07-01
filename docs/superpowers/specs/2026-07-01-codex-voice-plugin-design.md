@@ -188,7 +188,7 @@ Side-channel path:
 - The `/voice` MCP tool resolves and stores the current thread id at activation.
 - Incoming endpoint STT is appended to `~/.codex/voice/side-channel.jsonl` with timestamp, route, thread id, thread name, port, and text.
 - The HTTP response acknowledges receipt with `"Side-channel message received."`.
-- The listener immediately speaks a short varied, subject-aware acknowledgement, starts the LM Studio sidecar at the same time, then leaves a short breath before speaking the answer. Ollama and a slower read-only `codex exec` sidecar can be selected in settings when preferred.
+- The listener immediately speaks a short varied acknowledgement phrase, starts the LM Studio sidecar at the same time, then leaves a short breath before speaking the answer. Ollama and a slower read-only `codex exec` sidecar can be selected in settings when preferred.
 
 Main-thread path:
 
