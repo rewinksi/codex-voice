@@ -3,6 +3,7 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 
 import { recordSideChannelMessage } from "./lib/side-channel.mjs";
+import { respondToSideChannel } from "./lib/side-channel-response.mjs";
 import { extractTranscriptText } from "./lib/stt.mjs";
 import { startThreadWatcher } from "./lib/thread-watch.mjs";
 
@@ -48,7 +49,15 @@ function openAiAck() {
   };
 }
 
-export function createVoiceServer({ session, settings, codexHome, recorder = recordSideChannelMessage }) {
+export function createVoiceServer({
+  session,
+  settings,
+  codexHome,
+  recorder = recordSideChannelMessage,
+  sideChannelResponder = ({ session, settings, text }) => {
+    return respondToSideChannel({ codexHome }, session, settings, text);
+  },
+}) {
   return http.createServer(async (request, response) => {
     const url = new URL(request.url || "/", `http://${request.headers.host || "127.0.0.1"}`);
 
@@ -86,6 +95,7 @@ export function createVoiceServer({ session, settings, codexHome, recorder = rec
         const payload = await readJson(request);
         const text = extractTranscriptText(payload);
         await recorder({ codexHome }, session, text);
+        Promise.resolve(sideChannelResponder({ session, settings, codexHome, text })).catch(() => {});
 
         sendJson(response, 200, openAiAck());
       } catch (error) {

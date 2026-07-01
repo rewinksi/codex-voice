@@ -42,10 +42,14 @@ test("voice listener exposes health and OpenAI-compatible model endpoints", asyn
 
 test("voice listener records side-channel text without injecting into Codex", async () => {
   const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-side-channel-"));
+  const responded = [];
   const server = createVoiceServer({
     session: { threadId: "thread-a", threadName: "Alpha", port: 0 },
     settings: { host: "127.0.0.1", stt: {} },
     codexHome,
+    sideChannelResponder: async ({ session, text }) => {
+      responded.push({ session, text });
+    },
   });
   const port = await listen(server);
 
@@ -66,6 +70,10 @@ test("voice listener records side-channel text without injecting into Codex", as
     assert.equal(entry.threadName, "Alpha");
     assert.equal(entry.text, "what changed?");
     assert.equal(entry.route, "side-channel");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(responded.length, 1);
+    assert.equal(responded[0].text, "what changed?");
+    assert.equal(responded[0].session.threadId, "thread-a");
   } finally {
     await close(server);
     await rm(codexHome, { recursive: true, force: true });

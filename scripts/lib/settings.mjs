@@ -15,6 +15,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   stt: {
     openAiCompatiblePath: "/v1/chat/completions",
   },
+  sideChannel: {
+    responseMode: "codex-exec",
+    speakImmediateAck: true,
+    timeoutMs: 20000,
+    maxResponseChars: 260,
+    contextBytes: 120000,
+    maxContextChars: 2400,
+  },
   tts: {
     provider: "supertonic",
     speakOnOnline: true,

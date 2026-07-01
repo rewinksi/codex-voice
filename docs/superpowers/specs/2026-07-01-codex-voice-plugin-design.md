@@ -62,6 +62,14 @@ If `settings.json` does not exist, `/voice on` creates it with safe defaults:
   "stt": {
     "openAiCompatiblePath": "/v1/chat/completions"
   },
+  "sideChannel": {
+    "responseMode": "codex-exec",
+    "speakImmediateAck": true,
+    "timeoutMs": 20000,
+    "maxResponseChars": 260,
+    "contextBytes": 120000,
+    "maxContextChars": 2400
+  },
   "tts": {
     "provider": "supertonic",
     "speakOnOnline": true,
@@ -127,7 +135,7 @@ Accepted payload shapes:
 - Direct transcription style: `{ "text": "..." }`
 - Transcript style: `{ "transcript": "..." }`
 
-The listener extracts the user's text, rejects empty input, records the message to the local side-channel inbox, and returns an OpenAI-compatible acknowledgement. It must not forward endpoint text into the main Codex thread.
+The listener extracts the user's text, rejects empty input, records the message to the local side-channel inbox, starts an asynchronous spoken response, and returns an OpenAI-compatible acknowledgement. It must not forward endpoint text into the main Codex thread.
 
 The listener also exposes:
 
@@ -147,6 +155,7 @@ Side-channel path:
 - The `/voice` MCP tool resolves and stores the current thread id at activation.
 - Incoming endpoint STT is appended to `~/.codex/voice/side-channel.jsonl` with timestamp, route, thread id, thread name, port, and text.
 - The HTTP response acknowledges receipt with `"Side-channel message received."`.
+- The listener immediately speaks a short acknowledgement, then uses a read-only ephemeral `codex exec` sidecar with bounded recent thread context to produce a concise spoken answer.
 
 Main-thread path:
 
