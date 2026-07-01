@@ -1,7 +1,8 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { Readable } from "node:stream";
 
 import {
   DEFAULT_SETTINGS,
@@ -40,6 +41,9 @@ function publicElevenLabsConfig(config, hasApiKey) {
     voiceName: config.voiceName,
     model: config.model,
     responseFormat: config.responseFormat,
+    streaming: config.streaming !== false,
+    optimizeStreamingLatency: config.optimizeStreamingLatency ?? 3,
+    streamPlayer: config.streamPlayer || "auto",
     hasApiKey,
   };
 }
@@ -170,6 +174,10 @@ async function speakWithElevenLabs(text, config, deps = {}) {
   if (!voiceId) return { spoken: false, reason: "elevenlabs-voice-not-found" };
 
   const outputFormat = config.responseFormat || "mp3_44100_128";
+  if (config.streaming !== false) {
+    return streamWithElevenLabs(text, baseUrl, voiceId, outputFormat, config, deps);
+  }
+
   const response = await fetchImpl(
     `${baseUrl}/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=${encodeURIComponent(outputFormat)}`,
     {
@@ -191,6 +199,38 @@ async function speakWithElevenLabs(text, config, deps = {}) {
 
   const audio = Buffer.from(await response.arrayBuffer());
   return playAudio(audio, outputFormat, deps);
+}
+
+async function streamWithElevenLabs(text, baseUrl, voiceId, outputFormat, config, deps = {}) {
+  const fetchImpl = deps.fetch || globalThis.fetch;
+  const url = new URL(`${baseUrl}/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream`);
+  url.searchParams.set("output_format", outputFormat);
+  if (config.optimizeStreamingLatency !== null && config.optimizeStreamingLatency !== undefined) {
+    url.searchParams.set("optimize_streaming_latency", String(config.optimizeStreamingLatency));
+  }
+
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "xi-api-key": config.apiKey,
+    },
+    body: JSON.stringify({
+      text,
+      model_id: config.model || "eleven_flash_v2_5",
+    }),
+  });
+
+  if (!response.ok) {
+    return { spoken: false, reason: `elevenlabs-http-${response.status}` };
+  }
+
+  const stream = toNodeReadable(response.body);
+  if (!stream) {
+    const audio = Buffer.from(await response.arrayBuffer());
+    return playAudio(audio, outputFormat, deps);
+  }
+  return playAudioStream(stream, outputFormat, deps, config);
 }
 
 async function findElevenLabsVoiceId(baseUrl, config, fetchImpl) {
@@ -224,6 +264,84 @@ async function playAudio(audio, responseFormat, deps = {}) {
   }
   setTimeout(() => rm(tempDir, { recursive: true, force: true }), 60_000).unref();
   return { spoken: true };
+}
+
+function toNodeReadable(stream) {
+  if (!stream) return null;
+  if (typeof stream.getReader === "function" && Readable.fromWeb) {
+    return Readable.fromWeb(stream);
+  }
+  if (typeof stream[Symbol.asyncIterator] === "function") {
+    return Readable.from(stream);
+  }
+  return null;
+}
+
+async function playAudioStream(stream, responseFormat, deps = {}, config = {}) {
+  if (typeof deps.streamPlayer === "function") {
+    await deps.streamPlayer(stream, responseFormat);
+    return { spoken: true, streamed: true, player: "custom" };
+  }
+
+  const player = await selectStreamPlayer(deps.streamPlayer || config.streamPlayer || "auto");
+  if (!player) {
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+    const audio = Buffer.concat(chunks);
+    const result = await playAudio(audio, responseFormat, deps);
+    return { ...result, streamed: false, reason: result.reason || "stream-player-unavailable" };
+  }
+
+  await pipeToPlayer(stream, player);
+  return { spoken: true, streamed: true, player: player.command };
+}
+
+async function selectStreamPlayer(requested) {
+  if (requested && requested !== "auto") {
+    const command = Array.isArray(requested) ? requested[0] : String(requested);
+    const args = Array.isArray(requested) ? requested.slice(1) : streamPlayerArgs(command);
+    return (await commandExists(command)) ? { command, args } : null;
+  }
+
+  for (const command of ["ffplay", "mpv"]) {
+    if (await commandExists(command)) {
+      return { command, args: streamPlayerArgs(command) };
+    }
+  }
+  return null;
+}
+
+function streamPlayerArgs(command) {
+  if (command.includes("ffplay")) return ["-nodisp", "-autoexit", "-loglevel", "error", "-i", "pipe:0"];
+  if (command.includes("mpv")) return ["--no-terminal", "--really-quiet", "-"];
+  return ["-"];
+}
+
+function commandExists(command) {
+  return new Promise((resolve) => {
+    execFile("which", [command], (error) => resolve(!error));
+  });
+}
+
+function pipeToPlayer(stream, player) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(player.command, player.args, {
+      stdio: ["pipe", "ignore", "ignore"],
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`${player.command} exited with ${code}`));
+    });
+    stream.on("error", (error) => {
+      child.kill();
+      reject(error);
+    });
+    stream.pipe(child.stdin);
+  });
 }
 
 function audioExtension(responseFormat) {

@@ -30,6 +30,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
       voiceName: "",
       model: "eleven_flash_v2_5",
       responseFormat: "mp3_44100_128",
+      streaming: true,
+      optimizeStreamingLatency: 3,
+      streamPlayer: "auto",
     },
   },
 });

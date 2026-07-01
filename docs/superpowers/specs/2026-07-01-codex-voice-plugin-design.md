@@ -76,7 +76,10 @@ If `settings.json` does not exist, `/voice on` creates it with safe defaults:
       "baseUrl": "https://api.elevenlabs.io",
       "voiceName": "",
       "model": "eleven_flash_v2_5",
-      "responseFormat": "mp3_44100_128"
+      "responseFormat": "mp3_44100_128",
+      "streaming": true,
+      "optimizeStreamingLatency": 3,
+      "streamPlayer": "auto"
     }
   }
 }
@@ -106,8 +109,9 @@ ElevenLabs setup:
 - Read `ELEVENLABS_API_KEY` from `voice_env` or the process environment.
 - If either is missing, `/voice on` reports exactly which fields are missing and asks the user for the voice name and key.
 - The key is saved only in `voice_env`, never in `settings.json`, logs, or thread text.
-- Speaking resolves the configured voice name through ElevenLabs voices, then calls the text-to-speech endpoint with the configured model and output format.
-- ElevenLabs offers streaming TTS options. A future latency-focused implementation should prefer streaming playback for ElevenLabs instead of waiting for full audio before starting local playback.
+- Speaking resolves the configured voice name through ElevenLabs voices, then calls the streaming text-to-speech endpoint when `streaming` is enabled.
+- HTTP streaming is the default because spoken summaries are usually complete short phrases. The implementation pipes audio to `ffplay` or `mpv` when available and falls back to buffered playback if no streaming-capable player is found.
+- ElevenLabs WebSocket input streaming remains a future option for partial text generation or word-alignment workflows.
 
 ## STT Listener Contract
 

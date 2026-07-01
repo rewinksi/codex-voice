@@ -75,6 +75,9 @@ test("resolveTtsProvider accepts ElevenLabs key from voice_env", async () => {
     assert.equal(result.provider, "elevenlabs");
     assert.equal(result.ready, true);
     assert.equal(result.config.voiceName, "Rachel");
+    assert.equal(result.config.streaming, true);
+    assert.equal(result.config.optimizeStreamingLatency, 3);
+    assert.equal(result.config.streamPlayer, "auto");
     assert.equal(result.config.hasApiKey, true);
     assert.equal(JSON.stringify(result).includes("test-key"), false);
     assert.equal(result.config.apiKey, "test-key");
@@ -97,6 +100,7 @@ test("speakText uses ElevenLabs voice lookup without serializing the API key", a
           voiceName: "Rachel",
           model: "eleven_flash_v2_5",
           responseFormat: "mp3_44100_128",
+          streaming: false,
           hasApiKey: true,
         },
         {
@@ -134,4 +138,63 @@ test("speakText uses ElevenLabs voice lookup without serializing the API key", a
   assert.ok(calls.some((call) => call.url.includes("/v1/text-to-speech/voice-1")));
   assert.equal(calls.at(-1).options.headers["xi-api-key"], "secret-key");
   assert.equal(JSON.stringify(calls.at(-1).options.body).includes("secret-key"), false);
+});
+
+test("speakText streams ElevenLabs audio when streaming is enabled", async () => {
+  const calls = [];
+  const streamedChunks = [];
+  const result = await speakText(
+    "Short summary",
+    {
+      provider: "elevenlabs",
+      ready: true,
+      config: Object.defineProperties(
+        {
+          baseUrl: "https://api.elevenlabs.io",
+          voiceName: "Rachel",
+          model: "eleven_flash_v2_5",
+          responseFormat: "mp3_44100_128",
+          streaming: true,
+          optimizeStreamingLatency: 3,
+          hasApiKey: true,
+        },
+        {
+          apiKey: {
+            value: "secret-key",
+            enumerable: false,
+          },
+        },
+      ),
+    },
+    {
+      fetch: async (url, options = {}) => {
+        calls.push({ url: String(url), options });
+        if (String(url).endsWith("/v1/voices")) {
+          return {
+            ok: true,
+            json: async () => ({ voices: [{ name: "Rachel", voice_id: "voice-1" }] }),
+          };
+        }
+        return {
+          ok: true,
+          body: ReadableStream.from([Buffer.from("chunk-a"), Buffer.from("chunk-b")]),
+        };
+      },
+      streamPlayer: async (stream, responseFormat) => {
+        assert.equal(responseFormat, "mp3_44100_128");
+        for await (const chunk of stream) {
+          streamedChunks.push(Buffer.from(chunk).toString("utf8"));
+        }
+      },
+    },
+  );
+
+  assert.equal(result.spoken, true);
+  assert.equal(result.streamed, true);
+  assert.deepEqual(streamedChunks, ["chunk-a", "chunk-b"]);
+  const streamCall = calls.find((call) => call.url.includes("/v1/text-to-speech/voice-1/stream"));
+  assert.ok(streamCall);
+  assert.match(streamCall.url, /output_format=mp3_44100_128/);
+  assert.match(streamCall.url, /optimize_streaming_latency=3/);
+  assert.equal(JSON.parse(streamCall.options.body).model_id, "eleven_flash_v2_5");
 });

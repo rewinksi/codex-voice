@@ -80,7 +80,7 @@ Endpoint POSTs are side-channel only. They are recorded in `~/.codex/voice/side-
 Supported providers:
 
 - Supertonic at `http://127.0.0.1:7788` for local TTS
-- ElevenLabs via `ELEVENLABS_API_KEY` in `~/.codex/voice/voice_env` as a hosted TTS alternative
+- ElevenLabs via `ELEVENLABS_API_KEY` in `~/.codex/voice/voice_env` as a hosted streaming TTS alternative
 
 For STT, this plugin expects an external push-to-talk client. OpenScreech is a good pairing when you want a versatile and customizable local STT utility that can target the displayed listener endpoint.
 
@@ -88,7 +88,9 @@ Secrets belong in `voice_env`, not `settings.json`.
 
 ## Latency Notes
 
-The fastest perceived loop comes from short spoken summaries, a warm local TTS service, and avoiding long code/log narration. Supertonic is local but currently returns complete audio rather than streaming partial audio. ElevenLabs supports lower-latency hosted models and streaming TTS APIs, including HTTP response streaming and WebSocket input streaming, which are good candidates for a future lower-latency playback path.
+The fastest perceived loop comes from short spoken summaries, a warm local TTS service, and avoiding long code/log narration. Supertonic is local but currently returns complete audio rather than streaming partial audio. ElevenLabs uses the HTTP speech streaming endpoint by default when `tts.provider` is `elevenlabs`, piping audio to `ffplay` or `mpv` when available and falling back to buffered playback otherwise.
+
+ElevenLabs also offers WebSocket input streaming. That is best suited for partial text generation or word-alignment workflows; Codex Voice uses HTTP streaming first because spoken summaries are usually complete short phrases.
 
 ## Development
 
