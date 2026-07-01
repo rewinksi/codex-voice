@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createVoiceServer } from "../scripts/voice-listener.mjs";
+import { createListenerBridge, createVoiceServer } from "../scripts/voice-listener.mjs";
 
 function listen(server) {
   return new Promise((resolve) => {
@@ -89,4 +89,13 @@ test("voice listener rejects requests without configured bearer token", async ()
   } finally {
     await close(server);
   }
+});
+
+test("createListenerBridge passes session CODEX_HOME to the app-server bridge", () => {
+  const bridgeOptions = createListenerBridge(
+    { codexHome: "/tmp/codex-home-for-test" },
+    (options) => options,
+  );
+
+  assert.equal(bridgeOptions.appServer.env.CODEX_HOME, "/tmp/codex-home-for-test");
 });

@@ -47,6 +47,13 @@ function openAiAck() {
   };
 }
 
+export function createListenerBridge(data, factory = createBridge) {
+  const env = data?.codexHome
+    ? { ...process.env, CODEX_HOME: data.codexHome }
+    : process.env;
+  return factory({ appServer: { env } });
+}
+
 export function createVoiceServer({ session, settings, bridge = createBridge() }) {
   return http.createServer(async (request, response) => {
     const url = new URL(request.url || "/", `http://${request.headers.host || "127.0.0.1"}`);
@@ -134,6 +141,7 @@ async function main() {
   const server = createVoiceServer({
     session: data.session,
     settings: data.settings,
+    bridge: createListenerBridge(data),
   });
 
   const host = data.settings.host || "127.0.0.1";

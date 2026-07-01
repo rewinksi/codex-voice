@@ -114,7 +114,11 @@ export function resolveThreadFromState(cwd, deps = {}) {
 
 async function defaultStartListener({ options, session, settings }) {
   const sessionFile = getRuntimeSessionPath(options, session.threadId);
-  await writeFile(sessionFile, `${JSON.stringify({ session, settings }, null, 2)}\n`, { mode: 0o600 });
+  await writeFile(
+    sessionFile,
+    `${JSON.stringify({ codexHome: options.codexHome || process.env.CODEX_HOME || null, session, settings }, null, 2)}\n`,
+    { mode: 0o600 },
+  );
 
   const logsDir = getLogsDir(options);
   await mkdir(logsDir, { recursive: true, mode: 0o700 });

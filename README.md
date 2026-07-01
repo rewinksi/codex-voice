@@ -6,9 +6,9 @@ External STT/PTT clients post transcribed commands to the displayed local endpoi
 
 ## Status
 
-This repository contains the plugin scaffold, native `/voice` command, MCP lifecycle tools, per-thread port allocation, settings/secrets handling, TTS provider resolution, and local STT listener.
+This repository contains the plugin scaffold, native `/voice` command, MCP lifecycle tools, per-thread port allocation, settings/secrets handling, TTS provider resolution, local STT listener, and a Codex app-server bridge client.
 
-The listener side is verified. The Codex app-server bridge is isolated behind `scripts/lib/codex-bridge.mjs`; until a reachable app-server control transport is available, STT posts return `503` with `codex_bridge_unavailable` instead of silently dropping commands.
+The listener side is verified. The Codex app-server bridge lives in `scripts/lib/codex-bridge.mjs`; it initializes `codex app-server`, resumes the bound thread, and uses `turn/start` or `turn/steer` depending on thread state. If the app-server bridge is unavailable, STT posts return `503` with `codex_bridge_unavailable` instead of silently dropping commands.
 
 ## Commands
 
