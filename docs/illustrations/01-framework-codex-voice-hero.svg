@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+<title id="title">Codex Voice hero graphic</title>
+<desc id="desc">A warm vector illustration showing Codex Voice connecting the main thread, side-channel speech input, and spoken summary output.</desc>
+
+  <style>
+    .bg { fill: #FFF4E8; }
+    .panel { fill: #FFE1C2; stroke: #2A1F1A; stroke-width: 3; }
+    .node { fill: #FFECD2; stroke: #2A1F1A; stroke-width: 3; }
+    .accent { fill: #ED8936; stroke: #2A1F1A; stroke-width: 3; }
+    .accent2 { fill: #C05621; stroke: #2A1F1A; stroke-width: 3; }
+    .accent3 { fill: #F6AD55; stroke: #2A1F1A; stroke-width: 3; }
+    .line { stroke: #2A1F1A; stroke-width: 4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .dash { stroke: #2A1F1A; stroke-width: 3; fill: none; stroke-dasharray: 8 8; stroke-linecap: round; }
+    .title { font: 700 34px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #2A1F1A; }
+    .subtitle { font: 600 20px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #2A1F1A; }
+    .label { font: 600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #2A1F1A; }
+    .small { font: 500 15px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #2A1F1A; }
+    .tiny { font: 600 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #2A1F1A; letter-spacing: 0.08em; text-transform: uppercase; }
+  </style>
+
+<rect width="1600" height="900" rx="36" class="bg"/>
+<g opacity="0.22">
+  <circle cx="115" cy="90" r="8" fill="#ED8936"/>
+  <circle cx="1420" cy="125" r="10" fill="#F6AD55"/>
+  <circle cx="1490" cy="760" r="8" fill="#ED8936"/>
+  <circle cx="210" cy="760" r="12" fill="#C05621"/>
+</g>
+<text x="110" y="122" class="tiny">codex plugin · native /voice command</text>
+<text x="110" y="182" class="title">Codex Voice</text>
+<text x="110" y="225" class="subtitle">Spoken summaries for the main thread, with a side-channel that minds its own damn lane.</text>
+
+<rect x="110" y="285" width="560" height="410" rx="28" class="panel"/>
+<text x="145" y="333" class="tiny">main thread</text>
+<rect x="145" y="355" width="490" height="295" rx="22" fill="#FFFDF9" stroke="#2A1F1A" stroke-width="3"/>
+<rect x="180" y="390" width="150" height="44" rx="22" class="accent"/>
+<text x="216" y="419" class="label">/voice on</text>
+<rect x="180" y="455" width="420" height="54" rx="18" class="node"/>
+<text x="208" y="489" class="label">assistant reply → concise spoken summary</text>
+<rect x="180" y="530" width="265" height="82" rx="18" class="accent3"/>
+<text x="205" y="566" class="label">main thread stays</text>
+<text x="258" y="594" class="label">focused</text>
+<path d="M487 575 q20 -35 40 0 t40 0 t40 0" class="line"/>
+<circle cx="610" cy="571" r="16" class="accent2"/>
+<path d="M607 562 l0 18 M598 571 l18 0" class="line"/>
+
+<rect x="760" y="320" width="290" height="96" rx="24" class="accent2"/>
+<text x="799" y="357" class="tiny">listener endpoint</text>
+<text x="810" y="392" class="label">127.0.0.1:6901</text>
+
+<rect x="760" y="490" width="290" height="140" rx="24" class="accent"/>
+<text x="814" y="528" class="tiny">side-channel input</text>
+<circle cx="850" cy="573" r="28" fill="#FFFDF9" stroke="#2A1F1A" stroke-width="3"/>
+<rect x="842" y="548" width="16" height="40" rx="8" fill="#2A1F1A"/>
+<path d="M830 571 q20 26 40 0" class="line"/>
+<path d="M850 602 v18" class="line"/>
+<text x="895" y="568" class="label">OpenScreech</text>
+<text x="895" y="594" class="small">or external PTT STT</text>
+
+<rect x="1120" y="285" width="360" height="410" rx="28" class="panel"/>
+<text x="1155" y="333" class="tiny">spoken output</text>
+<rect x="1160" y="365" width="280" height="94" rx="20" class="accent3"/>
+<text x="1204" y="405" class="label">latest-only speech</text>
+<path d="M1210 430 q20 -30 40 0 t40 0 t40 0 t40 0" class="line"/>
+<rect x="1160" y="498" width="122" height="58" rx="18" class="accent"/>
+<text x="1186" y="534" class="label">Supertonic</text>
+<rect x="1312" y="498" width="110" height="58" rx="18" class="accent2"/>
+<text x="1334" y="534" class="label">ElevenLabs</text>
+<rect x="1160" y="586" width="262" height="64" rx="18" class="node"/>
+<text x="1210" y="626" class="label">local or hosted TTS</text>
+
+<path d="M670 488 C720 488, 720 368, 760 368" class="line"/>
+<path d="M1050 368 C1090 368, 1090 412, 1120 412" class="line"/>
+<path d="M1040 560 C1100 560, 1100 560, 1120 560" class="line"/>
+<path d="M1298 556 C1298 578, 1298 590, 1290 610" class="line"/>
+<path d="M1218 556 C1218 578, 1218 590, 1228 610" class="line"/>
+<path d="M905 416 v58" class="dash"/>
+<polygon points="760,368 780,358 780,378" fill="#2A1F1A"/>
+<polygon points="1120,412 1100,402 1100,422" fill="#2A1F1A"/>
+<polygon points="1120,560 1100,550 1100,570" fill="#2A1F1A"/>
+
+<text x="770" y="714" class="small" text-anchor="middle"></text>
+</svg>

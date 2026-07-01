@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 420" role="img" aria-labelledby="title desc">
+<title id="title">Adjacent side-channel feature card</title>
+<desc id="desc">A two-lane card showing the main thread and OpenScreech side-channel meeting at a local endpoint.</desc>
+
+  <style>
+    .bg { fill: #FFF4E8; }
+    .panel { fill: #FFE1C2; stroke: #2A1F1A; stroke-width: 3; }
+    .node { fill: #FFECD2; stroke: #2A1F1A; stroke-width: 3; }
+    .accent { fill: #ED8936; stroke: #2A1F1A; stroke-width: 3; }
+    .accent2 { fill: #C05621; stroke: #2A1F1A; stroke-width: 3; }
+    .accent3 { fill: #F6AD55; stroke: #2A1F1A; stroke-width: 3; }
+    .line { stroke: #2A1F1A; stroke-width: 4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .dash { stroke: #2A1F1A; stroke-width: 3; fill: none; stroke-dasharray: 8 8; stroke-linecap: round; }
+    .title { font: 700 34px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #2A1F1A; }
+    .subtitle { font: 600 20px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #2A1F1A; }
+    .label { font: 600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #2A1F1A; }
+    .small { font: 500 15px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #2A1F1A; }
+    .tiny { font: 600 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; fill: #2A1F1A; letter-spacing: 0.08em; text-transform: uppercase; }
+  </style>
+
+<rect width="420" height="420" rx="28" class="bg"/>
+<rect x="24" y="24" width="372" height="372" rx="26" class="panel"/>
+
+<text x="52" y="68" class="tiny">feature</text>
+<text x="52" y="104" class="title" style="font-size:26px">Adjacent side-channel</text>
+<rect x="52" y="136" width="136" height="208" rx="20" class="node"/>
+<text x="76" y="168" class="small">main thread</text>
+<rect x="76" y="188" width="88" height="112" rx="16" fill="#FFFDF9" stroke="#2A1F1A" stroke-width="3"/>
+<path d="M90 216 h60 M90 236 h46 M90 256 h52" class="line"/>
+<rect x="230" y="136" width="138" height="208" rx="20" class="accent"/>
+<text x="252" y="168" class="small">OpenScreech / PTT</text>
+<circle cx="299" cy="232" r="28" fill="#FFFDF9" stroke="#2A1F1A" stroke-width="3"/>
+<rect x="291" y="206" width="16" height="40" rx="8" fill="#2A1F1A"/>
+<path d="M279 228 q20 24 40 0" class="line"/>
+<path d="M299 260 v20" class="line"/>
+<rect x="88" y="314" width="240" height="42" rx="18" class="accent2"/>
+<text x="126" y="341" class="small">127.0.0.1:6901</text>
+<path d="M161 286 C176 318, 192 326, 210 326" class="dash"/>
+<path d="M299 286 C286 318, 266 326, 246 326" class="line"/>
+
+</svg>
