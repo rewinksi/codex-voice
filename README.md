@@ -6,9 +6,9 @@ Normal main-thread input remains the primary command path. When voice is active,
 
 ## Status
 
-This repository contains the plugin scaffold, native `/voice` command, MCP lifecycle tools, per-thread port allocation, settings/secrets handling, TTS provider resolution, local side-channel STT listener, spoken-summary tool, and Git marketplace metadata for distribution.
+This repository contains the plugin scaffold, native `/voice` command, MCP lifecycle tools, per-thread port allocation, settings/secrets handling, TTS provider resolution, local side-channel STT listener, automatic thread watcher, spoken-summary tool, and Git marketplace metadata for distribution.
 
-The installed plugin path has been smoke-tested locally: `/voice on` starts a listener, speaks the online announcement through Supertonic when available, accepts OpenAI-compatible side-channel STT POSTs, and records them without starting or steering the main Codex thread. Active voice sessions also expose `codex_voice_say` so Codex can speak concise summaries after normal main-thread replies.
+The installed plugin path has been smoke-tested locally: `/voice on` starts a listener, speaks the online announcement through the configured TTS provider, accepts OpenAI-compatible side-channel STT POSTs, records them without starting or steering the main Codex thread, and tails the active thread rollout so assistant text is spoken automatically.
 
 ## Install
 

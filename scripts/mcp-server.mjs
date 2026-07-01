@@ -18,7 +18,7 @@ import { resolveTtsProvider, speakText } from "./lib/tts.mjs";
 
 const SERVER_INFO = {
   name: "codex-voice",
-  version: "0.1.5",
+  version: "0.1.6",
 };
 
 const TOOL_DEFS = [
@@ -175,11 +175,33 @@ async function defaultStopProcess(pid) {
   }
 }
 
+function defaultIsProcessAlive(pid) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function voiceOn(args, deps) {
   const options = { codexHome: deps.codexHome };
   const thread = await resolveThread(args, deps);
   const { settings } = await ensureSettings(options);
   const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env });
+  const registry = await loadSessions(options);
+  const current = registry.sessions[thread.threadId];
+  const isProcessAlive = deps.isProcessAlive || defaultIsProcessAlive;
+  if (current?.active && current.pid && isProcessAlive(current.pid)) {
+    const text = [
+      `Voice listener endpoint: ${current.endpoint}`,
+      `Voice already online for ${current.threadName}`,
+      `TTS provider: ${tts.provider} (${tts.ready ? "ready" : "needs setup"})`,
+    ].join("\n");
+    return textResult(text, { session: current, tts, reused: true });
+  }
+
   let session = await allocateSession(options, thread, settings);
   const started = await (deps.startListener || defaultStartListener)({ options, session, settings });
   session = await setSessionPid(options, thread.threadId, started.pid ?? null);

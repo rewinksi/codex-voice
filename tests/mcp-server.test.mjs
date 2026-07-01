@@ -153,6 +153,52 @@ test("codex_voice_on allocates a session, starts listener, and returns endpoint 
   }
 });
 
+test("codex_voice_on reuses an already active listener for the same thread", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-mcp-reuse-"));
+  let starts = 0;
+  try {
+    const deps = {
+      codexHome,
+      startListener: async () => {
+        starts += 1;
+        return { pid: 12345, alreadyRunning: false };
+      },
+      isProcessAlive: () => true,
+      fetch: async () => ({ status: 404 }),
+    };
+
+    await handleMcpRequest(
+      {
+        id: 40,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_on",
+          arguments: { threadId: "thread-a", threadName: "Alpha" },
+        },
+      },
+      deps,
+    );
+
+    const second = await handleMcpRequest(
+      {
+        id: 41,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_on",
+          arguments: { threadId: "thread-a", threadName: "Alpha" },
+        },
+      },
+      deps,
+    );
+
+    assert.ifError(second.error);
+    assert.equal(starts, 1);
+    assert.match(second.result.content[0].text, /Voice already online for Alpha/);
+  } finally {
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
 test("codex_voice_status and codex_voice_off inspect and stop the thread session", async () => {
   const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-mcp-off-"));
   try {

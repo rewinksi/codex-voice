@@ -1,0 +1,131 @@
+import { stat, open, readdir } from "node:fs/promises";
+import path from "node:path";
+
+import { getCodexHome } from "./paths.mjs";
+import { resolveTtsProvider, speakText } from "./tts.mjs";
+
+export function extractAssistantSpeechText(line) {
+  if (!line.trim()) return "";
+  let item;
+  try {
+    item = JSON.parse(line);
+  } catch {
+    return "";
+  }
+
+  const payload = item?.payload;
+  if (item?.type !== "response_item" || payload?.type !== "message" || payload?.role !== "assistant") {
+    return "";
+  }
+
+  const parts = Array.isArray(payload.content) ? payload.content : [];
+  return parts
+    .filter((part) => part?.type === "output_text" && part.text)
+    .map((part) => part.text)
+    .join("\n")
+    .trim();
+}
+
+export function summarizeForSpeech(text, maxChars = 260) {
+  const cleaned = String(text || "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/<oai-mem-citation>[\s\S]*?<\/oai-mem-citation>/g, " ")
+    .replace(/^::[^\n]+$/gm, " ")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (cleaned.length <= maxChars) return cleaned;
+
+  const sentences = cleaned.match(/[^.!?]+[.!?]+/g) || [];
+  let summary = "";
+  for (const sentence of sentences) {
+    const next = `${summary}${summary ? " " : ""}${sentence.trim()}`;
+    if (next.length > maxChars) break;
+    summary = next;
+  }
+  if (summary) return summary;
+
+  const clipped = cleaned.slice(0, maxChars);
+  const lastSpace = clipped.lastIndexOf(" ");
+  return `${clipped.slice(0, lastSpace > 80 ? lastSpace : maxChars).trim()}...`;
+}
+
+export async function findRolloutPath(options = {}, threadId) {
+  const sessionsDir = path.join(getCodexHome(options), "sessions");
+  const suffix = `${threadId}.jsonl`;
+  return walkForSuffix(sessionsDir, suffix);
+}
+
+async function walkForSuffix(dir, suffix) {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isFile() && entry.name.endsWith(suffix)) return fullPath;
+    if (entry.isDirectory()) {
+      const found = await walkForSuffix(fullPath, suffix);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+export async function startThreadWatcher({ session, codexHome, intervalMs = 1000, deps = {} }) {
+  const options = { codexHome };
+  const rolloutPath = await findRolloutPath(options, session.threadId);
+  if (!rolloutPath) {
+    return { started: false, reason: "rollout-not-found" };
+  }
+
+  let offset = (await stat(rolloutPath)).size;
+  let buffer = "";
+  let busy = false;
+
+  const timer = setInterval(async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      const result = await readNewLines(rolloutPath, offset, buffer);
+      offset = result.offset;
+      buffer = result.buffer;
+      for (const line of result.lines) {
+        const text = summarizeForSpeech(extractAssistantSpeechText(line));
+        if (!text) continue;
+        const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env });
+        await speakText(text, tts, { fetch: deps.fetch, player: deps.player, streamPlayer: deps.streamPlayer });
+      }
+    } catch {
+      // Keep the listener alive even if one speech attempt fails.
+    } finally {
+      busy = false;
+    }
+  }, intervalMs);
+  timer.unref();
+
+  return { started: true, rolloutPath, stop: () => clearInterval(timer) };
+}
+
+async function readNewLines(filePath, offset, buffer) {
+  const size = (await stat(filePath)).size;
+  if (size <= offset) return { offset, buffer, lines: [] };
+
+  const length = size - offset;
+  const handle = await open(filePath, "r");
+  try {
+    const readBuffer = Buffer.alloc(length);
+    await handle.read(readBuffer, 0, length, offset);
+    const text = buffer + readBuffer.toString("utf8");
+    const parts = text.split(/\r?\n/);
+    const nextBuffer = parts.pop() || "";
+    return { offset: size, buffer: nextBuffer, lines: parts.filter(Boolean) };
+  } finally {
+    await handle.close();
+  }
+}

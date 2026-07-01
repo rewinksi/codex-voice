@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 import { recordSideChannelMessage } from "./lib/side-channel.mjs";
 import { extractTranscriptText } from "./lib/stt.mjs";
+import { startThreadWatcher } from "./lib/thread-watch.mjs";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -132,6 +133,15 @@ async function main() {
   server.listen(port, host, () => {
     process.stdout.write(`codex voice listener online at http://${host}:${port}/v1/chat/completions\n`);
   });
+  const watcher = await startThreadWatcher({
+    session: data.session,
+    codexHome: data.codexHome,
+  });
+  if (watcher.started) {
+    process.stdout.write(`codex voice thread watcher online for ${data.session.threadId}\n`);
+  } else {
+    process.stderr.write(`codex voice thread watcher unavailable: ${watcher.reason}\n`);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

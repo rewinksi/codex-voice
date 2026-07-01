@@ -1,6 +1,6 @@
 {
   "name": "codex-voice",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Native /voice side-channel for Codex threads; pairs well with OpenScreech STT and Supertonic local TTS.",
   "author": {
     "name": "Rewi"
