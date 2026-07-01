@@ -7,29 +7,104 @@ import { resolveTtsProvider, speakText } from "./tts.mjs";
 import { loadVoiceEnv } from "./settings.mjs";
 import { findRolloutPath, summarizeForSpeech } from "./thread-watch.mjs";
 
+let sideChannelSpeechQueue = Promise.resolve();
+let sideChannelHasSpoken = false;
+
 export async function respondToSideChannel(options = {}, session, settings, text, deps = {}) {
   const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env });
+  const speechDeps = {
+    fetch: deps.fetch,
+    player: deps.player,
+    streamPlayer: deps.streamPlayer,
+    sleep: deps.sleep,
+  };
+  const responsePromise = generateSideChannelResponse(session, settings, text, {
+    ...deps,
+    codexHome: options.codexHome,
+  });
+
   if (settings.sideChannel?.speakImmediateAck !== false) {
-    await speakText("Got it. I am answering on the side channel.", tts, {
+    await speakSideChannelText(buildSideChannelAckText(text), tts, settings, speechDeps);
+  }
+
+  const responseText = await responsePromise;
+  const spokenText = summarizeForSpeech(responseText, settings.sideChannel?.maxResponseChars || 260);
+  if (!spokenText) return { spoken: false, reason: "empty-response" };
+
+  const spoken = await speakSideChannelText(spokenText, tts, settings, speechDeps);
+  return { ...spoken, text: spokenText };
+}
+
+export function buildSideChannelAckText(text) {
+  const keywords = extractSubjectKeywords(text);
+  return keywords ? `Got it: ${keywords}.` : "Got it.";
+}
+
+export function resetSideChannelSpeechQueueForTests() {
+  sideChannelSpeechQueue = Promise.resolve();
+  sideChannelHasSpoken = false;
+}
+
+function speakSideChannelText(text, tts, settings, deps = {}) {
+  const gapMs = Number(settings.sideChannel?.speechGapMs ?? 250);
+  const run = sideChannelSpeechQueue.then(async () => {
+    if (sideChannelHasSpoken && gapMs > 0) {
+      await (deps.sleep || sleep)(gapMs);
+    }
+    const result = await speakText(text, tts, {
       fetch: deps.fetch,
       player: deps.player,
       streamPlayer: deps.streamPlayer,
     });
-  }
-
-  const responseText = await generateSideChannelResponse(session, settings, text, {
-    ...deps,
-    codexHome: options.codexHome,
+    sideChannelHasSpoken = true;
+    return result;
   });
-  const spokenText = summarizeForSpeech(responseText, settings.sideChannel?.maxResponseChars || 260);
-  if (!spokenText) return { spoken: false, reason: "empty-response" };
+  sideChannelSpeechQueue = run.catch(() => {});
+  return run;
+}
 
-  const spoken = await speakText(spokenText, tts, {
-    fetch: deps.fetch,
-    player: deps.player,
-    streamPlayer: deps.streamPlayer,
-  });
-  return { ...spoken, text: spokenText };
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function extractSubjectKeywords(text) {
+  const cleaned = String(text || "")
+    .replace(/\bsk-[A-Za-z0-9:_-]+\b/g, " ")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/[`*_~()[\]{}.,!?;:"']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return "";
+
+  const preferred = [
+    ["LM Studio", /\blm\s+studio\b/i],
+    ["side channel", /\bside\s+channel\b/i],
+    ["ElevenLabs", /\beleven\s*labs\b/i],
+    ["Supertonic", /\bsupertonic\b/i],
+    ["Gemma", /\bgemma\b/i],
+    ["OpenScreech", /\bopenscreech\b/i],
+    ["timeout", /\btimeouts?\b/i],
+    ["latency", /\blatency\b/i],
+    ["queue", /\bqueue\b/i],
+    ["listener", /\blistener\b/i],
+    ["endpoint", /\bendpoint\b/i],
+    ["voice", /\bvoice\b/i],
+    ["TTS", /\btts\b/i],
+    ["STT", /\bstt\b/i],
+  ];
+  const match = preferred.find(([, pattern]) => pattern.test(cleaned));
+  if (match) return match[0];
+
+  const stopwords = new Set([
+    "a", "an", "and", "are", "as", "at", "be", "but", "can", "could", "for", "from", "get",
+    "got", "have", "how", "i", "is", "it", "just", "me", "of", "on", "or", "please", "say",
+    "that", "the", "this", "to", "um", "we", "what", "when", "with", "you",
+  ]);
+  const words = cleaned
+    .split(/\s+/)
+    .filter((word) => word.length > 2 && word.length < 24 && !stopwords.has(word.toLowerCase()))
+    .slice(0, 2);
+  return words.join(" ");
 }
 
 export async function generateSideChannelResponse(session, settings, text, deps = {}) {
@@ -69,7 +144,8 @@ export async function generateSideChannelResponse(session, settings, text, deps 
 async function runLmStudioResponder(session, settings, text, deps = {}) {
   const baseUrl = (settings.sideChannel?.lmstudio?.baseUrl || "http://127.0.0.1:1234").replace(/\/$/, "");
   const model = settings.sideChannel?.lmstudio?.model || "google/gemma-4-12b-qat";
-  const timeout = Number(settings.sideChannel?.timeoutMs || 6000);
+  const timeout = Number(settings.sideChannel?.timeoutMs || 20000);
+  const maxTokens = Number(settings.sideChannel?.maxResponseTokens || 160);
   const context = await readRecentThreadContext({ codexHome: deps.codexHome }, session, settings);
   const apiKey = await resolveLmStudioToken({ codexHome: deps.codexHome }, deps);
   const fetchImpl = deps.fetch || globalThis.fetch;
@@ -84,27 +160,51 @@ async function runLmStudioResponder(session, settings, text, deps = {}) {
       messages: [
         {
           role: "system",
-          content: [
+          content: prefixLmStudioMessage(settings, [
             "You are Codex Voice's fast spoken side-channel.",
             "Answer in one short sentence. Be useful, casual, and do not mention implementation details unless asked.",
+            formatVoiceStyleInstruction(settings),
             "Do not modify files or interact with the main thread.",
-          ].join(" "),
+          ].filter(Boolean).join(" ")),
         },
         ...(context
-          ? [{ role: "user", content: `Recent main-thread context:\n${context}` }]
+          ? [{ role: "user", content: prefixLmStudioMessage(settings, `Recent main-thread context:\n${context}`) }]
           : []),
-        { role: "user", content: `Side-channel message: ${text}` },
+        { role: "user", content: prefixLmStudioMessage(settings, `Side-channel message: ${text}`) },
       ],
-      max_tokens: 80,
+      max_tokens: maxTokens,
       temperature: 0.3,
       stream: false,
+      reasoning: buildLmStudioReasoning(settings),
     }),
     signal: AbortSignal.timeout?.(timeout),
   });
 
   if (!response.ok) throw new Error(`lmstudio-http-${response.status}`);
   const payload = await response.json();
-  return String(payload.choices?.[0]?.message?.content || "").trim();
+  const content = String(payload.choices?.[0]?.message?.content || "").trim();
+  if (!content) throw new Error("lmstudio-empty-content");
+  return content;
+}
+
+function buildLmStudioReasoning(settings) {
+  const effort = settings.sideChannel?.lmstudio?.reasoningEffort;
+  return effort ? { effort } : undefined;
+}
+
+function formatVoiceStyleInstruction(settings) {
+  const style = settings.voiceStyle || {};
+  const parts = [];
+  if (style.spokenPersonality) parts.push(`Spoken personality: ${style.spokenPersonality}.`);
+  if (style.profanity) parts.push(`profanity: ${style.profanity}.`);
+  return parts.join(" ");
+}
+
+function prefixLmStudioMessage(settings, content) {
+  const prefix = String(settings.sideChannel?.lmstudio?.messagePrefix ?? "/nothink").trim();
+  if (!prefix) return content;
+  const text = String(content || "");
+  return text.startsWith(`${prefix} `) ? text : `${prefix} ${text}`;
 }
 
 async function resolveLmStudioToken(options = {}, deps = {}) {

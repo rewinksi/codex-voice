@@ -18,13 +18,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
   sideChannel: {
     responseMode: "lmstudio",
     speakImmediateAck: true,
-    timeoutMs: 6000,
+    timeoutMs: 20000,
     maxResponseChars: 260,
+    maxResponseTokens: 768,
+    speechGapMs: 250,
     contextBytes: 120000,
-    maxContextChars: 2400,
+    maxContextChars: 600,
     lmstudio: {
       baseUrl: "http://127.0.0.1:1234",
       model: "google/gemma-4-12b-qat",
+      messagePrefix: "/nothink",
+      reasoningEffort: "none",
     },
     ollama: {
       baseUrl: "http://127.0.0.1:11434",
@@ -34,6 +38,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   mainThreadSummary: {
     maxChars: 140,
     settleMs: 450,
+  },
+  voiceStyle: {
+    spokenPersonality: "concise, casual, witty, and useful",
+    profanity: "avoid",
   },
   tts: {
     provider: "supertonic",

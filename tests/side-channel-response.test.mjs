@@ -4,7 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { readRecentThreadContext, respondToSideChannel } from "../scripts/lib/side-channel-response.mjs";
+import {
+  buildSideChannelAckText,
+  readRecentThreadContext,
+  resetSideChannelSpeechQueueForTests,
+  respondToSideChannel,
+} from "../scripts/lib/side-channel-response.mjs";
 import { ensureSettings, saveSettings, writeVoiceEnv } from "../scripts/lib/settings.mjs";
 
 test("respondToSideChannel speaks a generated side-channel answer", async () => {
@@ -52,6 +57,67 @@ test("respondToSideChannel speaks a generated side-channel answer", async () => 
   }
 });
 
+test("buildSideChannelAckText references the side-channel subject briefly", () => {
+  assert.equal(
+    buildSideChannelAckText("Can you check the LM Studio timeout thing?"),
+    "Got it: LM Studio.",
+  );
+  assert.equal(
+    buildSideChannelAckText("Um, the side channel is still not answering"),
+    "Got it: side channel.",
+  );
+});
+
+test("respondToSideChannel leaves a breath between side-channel utterances", async () => {
+  resetSideChannelSpeechQueueForTests();
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-side-gap-"));
+  const spokenTexts = [];
+  const sleeps = [];
+  try {
+    const { settings } = await ensureSettings({ codexHome });
+    settings.tts.provider = "elevenlabs";
+    settings.tts.elevenlabs.voiceName = "Rachel";
+    settings.tts.elevenlabs.voiceId = "voice-1";
+    settings.tts.elevenlabs.streaming = false;
+    settings.sideChannel.responseMode = "codex-exec";
+    settings.sideChannel.speechGapMs = 250;
+    await saveSettings({ codexHome }, settings);
+    await writeVoiceEnv({ codexHome }, { ELEVENLABS_API_KEY: "test-key" });
+
+    await respondToSideChannel(
+      { codexHome },
+      { threadId: "thread-a", threadName: "Alpha", cwd: "/tmp" },
+      settings,
+      "Can you check the LM Studio timeout thing?",
+      {
+        runCodexExec: async () => "Timeout is bumped and the ack is cleaner.",
+        fetch: async (url, options = {}) => {
+          if (String(url).includes("/v1/text-to-speech/voice-1")) {
+            spokenTexts.push(JSON.parse(options.body).text);
+          }
+          return {
+            ok: true,
+            arrayBuffer: async () => Buffer.from("audio").buffer,
+          };
+        },
+        player: async () => {},
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+      },
+    );
+
+    assert.deepEqual(spokenTexts, [
+      "Got it: LM Studio.",
+      "Timeout is bumped and the ack is cleaner.",
+    ]);
+    assert.deepEqual(sleeps, [250]);
+  } finally {
+    resetSideChannelSpeechQueueForTests();
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
 test("respondToSideChannel uses LM Studio for quick side-channel answers by default", async () => {
   const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-side-lmstudio-"));
   const calls = [];
@@ -61,6 +127,10 @@ test("respondToSideChannel uses LM Studio for quick side-channel answers by defa
     settings.tts.provider = "elevenlabs";
     settings.tts.elevenlabs.voiceName = "Rachel";
     settings.tts.elevenlabs.streaming = false;
+    settings.voiceStyle = {
+      spokenPersonality: "concise, cheeky kiwi humour, light sarcasm",
+      profanity: "allowed when appropriate",
+    };
     await saveSettings({ codexHome }, settings);
     await writeVoiceEnv({ codexHome }, { ELEVENLABS_API_KEY: "test-key", LM_API_TOKEN: "lm-token" });
 
@@ -102,7 +172,13 @@ test("respondToSideChannel uses LM Studio for quick side-channel answers by defa
     const lmStudioCall = calls.find((call) => call.url.endsWith("/v1/chat/completions"));
     assert.ok(lmStudioCall);
     assert.equal(lmStudioCall.options.headers.authorization, "Bearer lm-token");
-    assert.equal(JSON.parse(lmStudioCall.options.body).model, "google/gemma-4-12b-qat");
+    const lmStudioBody = JSON.parse(lmStudioCall.options.body);
+    assert.equal(lmStudioBody.model, "google/gemma-4-12b-qat");
+    assert.equal(lmStudioBody.max_tokens, 768);
+    assert.deepEqual(lmStudioBody.reasoning, { effort: "none" });
+    assert.ok(lmStudioBody.messages.every((message) => message.content.startsWith("/nothink ")));
+    assert.match(lmStudioBody.messages[0].content, /cheeky kiwi humour/);
+    assert.match(lmStudioBody.messages[0].content, /profanity: allowed when appropriate/);
     assert.match(result.text, /LM Studio side-channel responder/);
   } finally {
     await rm(codexHome, { recursive: true, force: true });

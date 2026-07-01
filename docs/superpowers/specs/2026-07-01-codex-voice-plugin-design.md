@@ -65,13 +65,17 @@ If `settings.json` does not exist, `/voice on` creates it with safe defaults:
   "sideChannel": {
     "responseMode": "lmstudio",
     "speakImmediateAck": true,
-    "timeoutMs": 6000,
+    "timeoutMs": 20000,
     "maxResponseChars": 260,
+    "maxResponseTokens": 768,
+    "speechGapMs": 250,
     "contextBytes": 120000,
-    "maxContextChars": 2400,
+    "maxContextChars": 600,
     "lmstudio": {
       "baseUrl": "http://127.0.0.1:1234",
-      "model": "google/gemma-4-12b-qat"
+      "model": "google/gemma-4-12b-qat",
+      "messagePrefix": "/nothink",
+      "reasoningEffort": "none"
     },
     "ollama": {
       "baseUrl": "http://127.0.0.1:11434",
@@ -81,6 +85,10 @@ If `settings.json` does not exist, `/voice on` creates it with safe defaults:
   "mainThreadSummary": {
     "maxChars": 140,
     "settleMs": 450
+  },
+  "voiceStyle": {
+    "spokenPersonality": "concise, casual, witty, and useful",
+    "profanity": "avoid"
   },
   "tts": {
     "provider": "supertonic",
@@ -168,7 +176,7 @@ Side-channel path:
 - The `/voice` MCP tool resolves and stores the current thread id at activation.
 - Incoming endpoint STT is appended to `~/.codex/voice/side-channel.jsonl` with timestamp, route, thread id, thread name, port, and text.
 - The HTTP response acknowledges receipt with `"Side-channel message received."`.
-- The listener immediately speaks a short acknowledgement, then uses a fast local LM Studio sidecar with bounded recent thread context to produce a concise spoken answer. Ollama and a slower read-only `codex exec` sidecar can be selected in settings when preferred.
+- The listener immediately speaks a short subject-aware acknowledgement, starts the LM Studio sidecar at the same time, then leaves a short breath before speaking the answer. Ollama and a slower read-only `codex exec` sidecar can be selected in settings when preferred.
 
 Main-thread path:
 
