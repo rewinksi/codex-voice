@@ -52,8 +52,8 @@ test("respondToSideChannel speaks a generated side-channel answer", async () => 
   }
 });
 
-test("respondToSideChannel uses Ollama for quick side-channel answers by default", async () => {
-  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-side-ollama-"));
+test("respondToSideChannel uses LM Studio for quick side-channel answers by default", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-side-lmstudio-"));
   const calls = [];
   const played = [];
   try {
@@ -61,9 +61,8 @@ test("respondToSideChannel uses Ollama for quick side-channel answers by default
     settings.tts.provider = "elevenlabs";
     settings.tts.elevenlabs.voiceName = "Rachel";
     settings.tts.elevenlabs.streaming = false;
-    settings.sideChannel.responseMode = "ollama";
     await saveSettings({ codexHome }, settings);
-    await writeVoiceEnv({ codexHome }, { ELEVENLABS_API_KEY: "test-key" });
+    await writeVoiceEnv({ codexHome }, { ELEVENLABS_API_KEY: "test-key", LM_API_TOKEN: "lm-token" });
 
     const result = await respondToSideChannel(
       { codexHome },
@@ -73,10 +72,12 @@ test("respondToSideChannel uses Ollama for quick side-channel answers by default
       {
         fetch: async (url, options = {}) => {
           calls.push({ url: String(url), options });
-          if (String(url).endsWith("/api/generate")) {
+          if (String(url).endsWith("/v1/chat/completions")) {
             return {
               ok: true,
-              json: async () => ({ response: "It is working through the quick side-channel responder." }),
+              json: async () => ({
+                choices: [{ message: { content: "It is working through the LM Studio side-channel responder." } }],
+              }),
             };
           }
           if (String(url).endsWith("/v1/voices")) {
@@ -98,10 +99,11 @@ test("respondToSideChannel uses Ollama for quick side-channel answers by default
 
     assert.equal(result.spoken, true);
     assert.equal(played.length, 2);
-    const ollamaCall = calls.find((call) => call.url.endsWith("/api/generate"));
-    assert.ok(ollamaCall);
-    assert.equal(JSON.parse(ollamaCall.options.body).model, "llama3.2:3b");
-    assert.match(result.text, /quick side-channel responder/);
+    const lmStudioCall = calls.find((call) => call.url.endsWith("/v1/chat/completions"));
+    assert.ok(lmStudioCall);
+    assert.equal(lmStudioCall.options.headers.authorization, "Bearer lm-token");
+    assert.equal(JSON.parse(lmStudioCall.options.body).model, "google/gemma-4-12b-qat");
+    assert.match(result.text, /LM Studio side-channel responder/);
   } finally {
     await rm(codexHome, { recursive: true, force: true });
   }

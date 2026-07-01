@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { resolveTtsProvider, speakText } from "./tts.mjs";
+import { loadVoiceEnv } from "./settings.mjs";
 import { findRolloutPath, summarizeForSpeech } from "./thread-watch.mjs";
 
 export async function respondToSideChannel(options = {}, session, settings, text, deps = {}) {
@@ -36,6 +37,16 @@ export async function generateSideChannelResponse(session, settings, text, deps 
   if (mode === "ack") {
     return "I heard you on the side channel. I will keep the main thread uninterrupted.";
   }
+  if (mode === "lmstudio") {
+    try {
+      return await runLmStudioResponder(session, settings, text, {
+        ...deps,
+        codexHome: deps.codexHome,
+      });
+    } catch {
+      return "I heard the side-channel message, but LM Studio did not answer in time.";
+    }
+  }
   if (mode === "ollama") {
     try {
       return await runOllamaResponder(session, settings, text, deps);
@@ -53,6 +64,55 @@ export async function generateSideChannelResponse(session, settings, text, deps 
   } catch {
     return "I heard the side-channel message, but I could not generate a quick answer.";
   }
+}
+
+async function runLmStudioResponder(session, settings, text, deps = {}) {
+  const baseUrl = (settings.sideChannel?.lmstudio?.baseUrl || "http://127.0.0.1:1234").replace(/\/$/, "");
+  const model = settings.sideChannel?.lmstudio?.model || "google/gemma-4-12b-qat";
+  const timeout = Number(settings.sideChannel?.timeoutMs || 6000);
+  const context = await readRecentThreadContext({ codexHome: deps.codexHome }, session, settings);
+  const apiKey = await resolveLmStudioToken({ codexHome: deps.codexHome }, deps);
+  const fetchImpl = deps.fetch || globalThis.fetch;
+  const headers = { "content-type": "application/json" };
+  if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+
+  const response = await fetchImpl(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "You are Codex Voice's fast spoken side-channel.",
+            "Answer in one short sentence. Be useful, casual, and do not mention implementation details unless asked.",
+            "Do not modify files or interact with the main thread.",
+          ].join(" "),
+        },
+        ...(context
+          ? [{ role: "user", content: `Recent main-thread context:\n${context}` }]
+          : []),
+        { role: "user", content: `Side-channel message: ${text}` },
+      ],
+      max_tokens: 80,
+      temperature: 0.3,
+      stream: false,
+    }),
+    signal: AbortSignal.timeout?.(timeout),
+  });
+
+  if (!response.ok) throw new Error(`lmstudio-http-${response.status}`);
+  const payload = await response.json();
+  return String(payload.choices?.[0]?.message?.content || "").trim();
+}
+
+async function resolveLmStudioToken(options = {}, deps = {}) {
+  const env = deps.env || process.env;
+  if (env.LM_API_TOKEN) return env.LM_API_TOKEN;
+  if (env.LM_STUDIO_API_KEY) return env.LM_STUDIO_API_KEY;
+  const voiceEnv = await loadVoiceEnv(options);
+  return voiceEnv.LM_API_TOKEN || voiceEnv.LM_STUDIO_API_KEY || "";
 }
 
 async function runOllamaResponder(session, settings, text, deps = {}) {

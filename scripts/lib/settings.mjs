@@ -16,12 +16,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
     openAiCompatiblePath: "/v1/chat/completions",
   },
   sideChannel: {
-    responseMode: "ollama",
+    responseMode: "lmstudio",
     speakImmediateAck: true,
     timeoutMs: 6000,
     maxResponseChars: 260,
     contextBytes: 120000,
     maxContextChars: 2400,
+    lmstudio: {
+      baseUrl: "http://127.0.0.1:1234",
+      model: "google/gemma-4-12b-qat",
+    },
     ollama: {
       baseUrl: "http://127.0.0.1:11434",
       model: "llama3.2:3b",

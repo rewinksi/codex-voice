@@ -8,7 +8,7 @@ Normal main-thread input remains the primary command path. When voice is active,
 
 This repository contains the plugin scaffold, native `/voice` command, MCP lifecycle tools, per-thread port allocation, settings/secrets handling, TTS provider resolution, local side-channel STT listener, automatic thread watcher, spoken-summary tool, and Git marketplace metadata for distribution.
 
-The installed plugin path has been smoke-tested locally: `/voice on` starts a listener, speaks the online announcement through the configured TTS provider, accepts OpenAI-compatible side-channel STT POSTs, records them without starting or steering the main Codex thread, answers them aloud through a fast local Ollama sidecar by default, and tails the active thread rollout so assistant text is spoken automatically.
+The installed plugin path has been smoke-tested locally: `/voice on` starts a listener, speaks the online announcement through the configured TTS provider, accepts OpenAI-compatible side-channel STT POSTs, records them without starting or steering the main Codex thread, answers them aloud through a fast local LM Studio sidecar by default, and tails the active thread rollout so assistant text is spoken automatically.
 
 ## Install
 
@@ -73,7 +73,7 @@ GET /healthz
 GET /v1/models
 ```
 
-Endpoint POSTs are side-channel only. They are recorded in `~/.codex/voice/side-channel.jsonl`, immediately acknowledged aloud, answered aloud through a fast local Ollama sidecar with recent thread context, and never call `turn/start`, `turn/steer`, or otherwise interrupt main-thread work. A slower read-only `codex exec` sidecar remains available through settings when deeper reasoning is worth the latency.
+Endpoint POSTs are side-channel only. They are recorded in `~/.codex/voice/side-channel.jsonl`, immediately acknowledged aloud, answered aloud through a fast local LM Studio sidecar with recent thread context, and never call `turn/start`, `turn/steer`, or otherwise interrupt main-thread work. Ollama and a slower read-only `codex exec` sidecar remain available through settings.
 
 ## TTS Providers
 
