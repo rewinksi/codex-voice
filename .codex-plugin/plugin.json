@@ -1,0 +1,38 @@
+{
+  "name": "codex-voice",
+  "version": "0.1.0",
+  "description": "Adds a native /voice command for per-thread conversational voice side-channels in Codex.",
+  "author": {
+    "name": "Rewi"
+  },
+  "homepage": "https://github.com/rewinski/codex-voice",
+  "repository": "https://github.com/rewinski/codex-voice",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "voice",
+    "tts",
+    "stt",
+    "supertonic",
+    "elevenlabs"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Codex Voice",
+    "shortDescription": "Native /voice side-channel for Codex threads.",
+    "longDescription": "Codex Voice adds a per-thread local voice command pipeline. External STT clients post to the displayed listener endpoint, and Codex can respond through Supertonic or ElevenLabs while keeping technical work in the thread.",
+    "developerName": "Rewi",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Run /voice on to start a voice side-channel.",
+      "Run /voice status to inspect the listener."
+    ],
+    "brandColor": "#2563EB"
+  }
+}
