@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { ensureSettings, saveSettings, writeVoiceEnv } from "../scripts/lib/settings.mjs";
-import { resolveTtsProvider } from "../scripts/lib/tts.mjs";
+import { resolveTtsProvider, speakText } from "../scripts/lib/tts.mjs";
 
 test("resolveTtsProvider discovers reachable Supertonic and persists non-secret details", async () => {
   const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-tts-supertonic-"));
@@ -77,7 +77,61 @@ test("resolveTtsProvider accepts ElevenLabs key from voice_env", async () => {
     assert.equal(result.config.voiceName, "Rachel");
     assert.equal(result.config.hasApiKey, true);
     assert.equal(JSON.stringify(result).includes("test-key"), false);
+    assert.equal(result.config.apiKey, "test-key");
   } finally {
     await rm(codexHome, { recursive: true, force: true });
   }
+});
+
+test("speakText uses ElevenLabs voice lookup without serializing the API key", async () => {
+  const calls = [];
+  const played = [];
+  const result = await speakText(
+    "Voice online",
+    {
+      provider: "elevenlabs",
+      ready: true,
+      config: Object.defineProperties(
+        {
+          baseUrl: "https://api.elevenlabs.io",
+          voiceName: "Rachel",
+          model: "eleven_flash_v2_5",
+          responseFormat: "mp3_44100_128",
+          hasApiKey: true,
+        },
+        {
+          apiKey: {
+            value: "secret-key",
+            enumerable: false,
+          },
+        },
+      ),
+    },
+    {
+      fetch: async (url, options = {}) => {
+        calls.push({ url: String(url), options });
+        if (String(url).endsWith("/v1/voices")) {
+          return {
+            ok: true,
+            json: async () => ({ voices: [{ name: "Rachel", voice_id: "voice-1" }] }),
+          };
+        }
+        return {
+          ok: true,
+          arrayBuffer: async () => Buffer.from("audio").buffer,
+        };
+      },
+      player: async (audioPath) => {
+        played.push(audioPath);
+      },
+    },
+  );
+
+  assert.equal(result.spoken, true);
+  assert.equal(played.length, 1);
+  assert.ok(played[0].endsWith(".mp3"));
+  assert.ok(calls.some((call) => call.url.endsWith("/v1/voices")));
+  assert.ok(calls.some((call) => call.url.includes("/v1/text-to-speech/voice-1")));
+  assert.equal(calls.at(-1).options.headers["xi-api-key"], "secret-key");
+  assert.equal(JSON.stringify(calls.at(-1).options.body).includes("secret-key"), false);
 });

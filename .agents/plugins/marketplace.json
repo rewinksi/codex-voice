@@ -1,0 +1,22 @@
+{
+  "name": "codex-voice",
+  "interface": {
+    "displayName": "Codex Voice"
+  },
+  "plugins": [
+    {
+      "name": "codex-voice",
+      "displayName": "Codex Voice",
+      "source": {
+        "source": "local",
+        "path": "."
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity",
+      "description": "Native /voice side-channel for Codex threads. Pair with OpenScreech for customizable STT and Supertonic for local TTS, or use ElevenLabs as a hosted TTS alternative."
+    }
+  ]
+}

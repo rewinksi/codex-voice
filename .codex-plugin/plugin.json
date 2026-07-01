@@ -1,7 +1,7 @@
 {
   "name": "codex-voice",
-  "version": "0.1.0",
-  "description": "Adds a native /voice command for per-thread conversational voice side-channels in Codex.",
+  "version": "0.1.1",
+  "description": "Native /voice side-channel for Codex threads; pairs well with OpenScreech STT and Supertonic local TTS.",
   "author": {
     "name": "Rewi"
   },
@@ -21,7 +21,7 @@
   "interface": {
     "displayName": "Codex Voice",
     "shortDescription": "Native /voice side-channel for Codex threads.",
-    "longDescription": "Codex Voice adds a per-thread local voice command pipeline. External STT clients post to the displayed listener endpoint, and Codex can respond through Supertonic or ElevenLabs while keeping technical work in the thread.",
+    "longDescription": "Codex Voice adds a per-thread local voice command pipeline. Pair it with OpenScreech for versatile, customizable STT and Supertonic for local TTS, or use ElevenLabs as a hosted TTS alternative. External STT clients post to the displayed listener endpoint while technical work stays in the thread.",
     "developerName": "Rewi",
     "category": "Productivity",
     "capabilities": [

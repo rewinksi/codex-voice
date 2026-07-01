@@ -26,8 +26,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
       responseFormat: "wav",
     },
     elevenlabs: {
+      baseUrl: "https://api.elevenlabs.io",
       voiceName: "",
       model: "eleven_flash_v2_5",
+      responseFormat: "mp3_44100_128",
     },
   },
 });

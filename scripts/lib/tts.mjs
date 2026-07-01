@@ -36,8 +36,10 @@ function publicSupertonicConfig(config) {
 
 function publicElevenLabsConfig(config, hasApiKey) {
   return {
+    baseUrl: config.baseUrl,
     voiceName: config.voiceName,
     model: config.model,
+    responseFormat: config.responseFormat,
     hasApiKey,
   };
 }
@@ -110,11 +112,17 @@ function resolveElevenLabs(settings, voiceEnv, env) {
   if (!elevenlabs.voiceName) missing.push("tts.elevenlabs.voiceName");
   if (!apiKey) missing.push("ELEVENLABS_API_KEY");
 
+  const config = publicElevenLabsConfig(elevenlabs, Boolean(apiKey));
+  Object.defineProperty(config, "apiKey", {
+    value: apiKey,
+    enumerable: false,
+  });
+
   return {
     provider: "elevenlabs",
     ready: missing.length === 0,
     missing,
-    config: publicElevenLabsConfig(elevenlabs, Boolean(apiKey)),
+    config,
   };
 }
 
@@ -123,7 +131,10 @@ export async function speakText(text, providerResult, deps = {}) {
   if (providerResult.provider === "supertonic") {
     return speakWithSupertonic(text, providerResult.config, deps);
   }
-  return { spoken: false, reason: "provider-speaking-not-implemented" };
+  if (providerResult.provider === "elevenlabs") {
+    return speakWithElevenLabs(text, providerResult.config, deps);
+  }
+  return { spoken: false, reason: "unsupported-provider" };
 }
 
 async function speakWithSupertonic(text, config, deps = {}) {
@@ -146,13 +157,79 @@ async function speakWithSupertonic(text, config, deps = {}) {
   }
 
   const audio = Buffer.from(await response.arrayBuffer());
+  return playAudio(audio, config.responseFormat || "wav", deps);
+}
+
+async function speakWithElevenLabs(text, config, deps = {}) {
+  const fetchImpl = deps.fetch || globalThis.fetch;
+  if (!fetchImpl) return { spoken: false, reason: "fetch-unavailable" };
+  if (!config?.apiKey) return { spoken: false, reason: "elevenlabs-api-key-missing" };
+
+  const baseUrl = (config.baseUrl || "https://api.elevenlabs.io").replace(/\/$/, "");
+  const voiceId = await findElevenLabsVoiceId(baseUrl, config, fetchImpl);
+  if (!voiceId) return { spoken: false, reason: "elevenlabs-voice-not-found" };
+
+  const outputFormat = config.responseFormat || "mp3_44100_128";
+  const response = await fetchImpl(
+    `${baseUrl}/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=${encodeURIComponent(outputFormat)}`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "xi-api-key": config.apiKey,
+      },
+      body: JSON.stringify({
+        text,
+        model_id: config.model || "eleven_flash_v2_5",
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    return { spoken: false, reason: `elevenlabs-http-${response.status}` };
+  }
+
+  const audio = Buffer.from(await response.arrayBuffer());
+  return playAudio(audio, outputFormat, deps);
+}
+
+async function findElevenLabsVoiceId(baseUrl, config, fetchImpl) {
+  const response = await fetchImpl(`${baseUrl}/v1/voices`, {
+    method: "GET",
+    headers: {
+      "xi-api-key": config.apiKey,
+    },
+  });
+  if (!response.ok) return null;
+
+  const payload = await response.json();
+  const requested = String(config.voiceName || "").trim().toLowerCase();
+  const match = payload?.voices?.find((voice) => {
+    return String(voice.name || "").trim().toLowerCase() === requested;
+  });
+  return match?.voice_id || null;
+}
+
+async function playAudio(audio, responseFormat, deps = {}) {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "codex-voice-audio-"));
-  const audioPath = path.join(tempDir, `speech.${config.responseFormat || "wav"}`);
+  const audioPath = path.join(tempDir, `speech.${audioExtension(responseFormat)}`);
   await writeFile(audioPath, audio);
 
   const player = deps.player || "afplay";
-  const child = spawn(player, [audioPath], { stdio: "ignore", detached: true });
-  child.unref();
+  if (typeof player === "function") {
+    await player(audioPath);
+  } else {
+    const child = spawn(player, [audioPath], { stdio: "ignore", detached: true });
+    child.unref();
+  }
   setTimeout(() => rm(tempDir, { recursive: true, force: true }), 60_000).unref();
   return { spoken: true };
+}
+
+function audioExtension(responseFormat) {
+  const format = String(responseFormat || "").toLowerCase();
+  if (format.startsWith("mp3")) return "mp3";
+  if (format.startsWith("wav") || format.includes("pcm")) return "wav";
+  if (format.startsWith("opus")) return "opus";
+  return "audio";
 }

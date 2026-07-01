@@ -71,8 +71,10 @@ If `settings.json` does not exist, `/voice on` creates it with safe defaults:
       "responseFormat": "wav"
     },
     "elevenlabs": {
+      "baseUrl": "https://api.elevenlabs.io",
       "voiceName": "",
-      "model": "eleven_flash_v2_5"
+      "model": "eleven_flash_v2_5",
+      "responseFormat": "mp3_44100_128"
     }
   }
 }
@@ -87,7 +89,7 @@ Supported providers:
 - `supertonic`
 - `elevenlabs`
 
-Provider selection comes from `settings.json`. If unset or invalid, the plugin prefers Supertonic when reachable, then prompts for ElevenLabs setup.
+Provider selection comes from `settings.json`. If unset or invalid, the plugin prefers Supertonic when reachable, then prompts for ElevenLabs setup. OpenScreech is the recommended companion STT utility for users who want a versatile, customizable push-to-talk transcription client.
 
 Supertonic setup:
 
@@ -102,6 +104,7 @@ ElevenLabs setup:
 - Read `ELEVENLABS_API_KEY` from `voice_env` or the process environment.
 - If either is missing, `/voice on` reports exactly which fields are missing and asks the user for the voice name and key.
 - The key is saved only in `voice_env`, never in `settings.json`, logs, or thread text.
+- Speaking resolves the configured voice name through ElevenLabs voices, then calls the text-to-speech endpoint with the configured model and output format.
 
 ## STT Listener Contract
 
