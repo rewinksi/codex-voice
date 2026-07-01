@@ -63,12 +63,16 @@ If `settings.json` does not exist, `/voice on` creates it with safe defaults:
     "openAiCompatiblePath": "/v1/chat/completions"
   },
   "sideChannel": {
-    "responseMode": "codex-exec",
+    "responseMode": "ollama",
     "speakImmediateAck": true,
-    "timeoutMs": 20000,
+    "timeoutMs": 6000,
     "maxResponseChars": 260,
     "contextBytes": 120000,
-    "maxContextChars": 2400
+    "maxContextChars": 2400,
+    "ollama": {
+      "baseUrl": "http://127.0.0.1:11434",
+      "model": "llama3.2:3b"
+    }
   },
   "tts": {
     "provider": "supertonic",
@@ -155,7 +159,7 @@ Side-channel path:
 - The `/voice` MCP tool resolves and stores the current thread id at activation.
 - Incoming endpoint STT is appended to `~/.codex/voice/side-channel.jsonl` with timestamp, route, thread id, thread name, port, and text.
 - The HTTP response acknowledges receipt with `"Side-channel message received."`.
-- The listener immediately speaks a short acknowledgement, then uses a read-only ephemeral `codex exec` sidecar with bounded recent thread context to produce a concise spoken answer.
+- The listener immediately speaks a short acknowledgement, then uses a fast local Ollama sidecar with bounded recent thread context to produce a concise spoken answer. A slower read-only `codex exec` sidecar can be selected in settings when deeper reasoning is worth the added latency.
 
 Main-thread path:
 

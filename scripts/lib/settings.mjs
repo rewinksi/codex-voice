@@ -16,12 +16,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
     openAiCompatiblePath: "/v1/chat/completions",
   },
   sideChannel: {
-    responseMode: "codex-exec",
+    responseMode: "ollama",
     speakImmediateAck: true,
-    timeoutMs: 20000,
+    timeoutMs: 6000,
     maxResponseChars: 260,
     contextBytes: 120000,
     maxContextChars: 2400,
+    ollama: {
+      baseUrl: "http://127.0.0.1:11434",
+      model: "llama3.2:3b",
+    },
   },
   tts: {
     provider: "supertonic",

@@ -52,6 +52,61 @@ test("respondToSideChannel speaks a generated side-channel answer", async () => 
   }
 });
 
+test("respondToSideChannel uses Ollama for quick side-channel answers by default", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-side-ollama-"));
+  const calls = [];
+  const played = [];
+  try {
+    const { settings } = await ensureSettings({ codexHome });
+    settings.tts.provider = "elevenlabs";
+    settings.tts.elevenlabs.voiceName = "Rachel";
+    settings.tts.elevenlabs.streaming = false;
+    settings.sideChannel.responseMode = "ollama";
+    await saveSettings({ codexHome }, settings);
+    await writeVoiceEnv({ codexHome }, { ELEVENLABS_API_KEY: "test-key" });
+
+    const result = await respondToSideChannel(
+      { codexHome },
+      { threadId: "thread-a", threadName: "Alpha", cwd: "/tmp" },
+      settings,
+      "How is this working?",
+      {
+        fetch: async (url, options = {}) => {
+          calls.push({ url: String(url), options });
+          if (String(url).endsWith("/api/generate")) {
+            return {
+              ok: true,
+              json: async () => ({ response: "It is working through the quick side-channel responder." }),
+            };
+          }
+          if (String(url).endsWith("/v1/voices")) {
+            return {
+              ok: true,
+              json: async () => ({ voices: [{ name: "Rachel", voice_id: "voice-1" }] }),
+            };
+          }
+          return {
+            ok: true,
+            arrayBuffer: async () => Buffer.from("audio").buffer,
+          };
+        },
+        player: async (audioPath) => {
+          played.push(audioPath);
+        },
+      },
+    );
+
+    assert.equal(result.spoken, true);
+    assert.equal(played.length, 2);
+    const ollamaCall = calls.find((call) => call.url.endsWith("/api/generate"));
+    assert.ok(ollamaCall);
+    assert.equal(JSON.parse(ollamaCall.options.body).model, "llama3.2:3b");
+    assert.match(result.text, /quick side-channel responder/);
+  } finally {
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
 test("readRecentThreadContext extracts bounded recent user and assistant messages", async () => {
   const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-side-context-"));
   const threadId = "thread-context-a";

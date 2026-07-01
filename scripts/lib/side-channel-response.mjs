@@ -36,6 +36,13 @@ export async function generateSideChannelResponse(session, settings, text, deps 
   if (mode === "ack") {
     return "I heard you on the side channel. I will keep the main thread uninterrupted.";
   }
+  if (mode === "ollama") {
+    try {
+      return await runOllamaResponder(session, settings, text, deps);
+    } catch {
+      return "I heard the side-channel message, but the quick local responder did not answer in time.";
+    }
+  }
   if (mode !== "codex-exec") {
     return `Unsupported side-channel response mode: ${mode}`;
   }
@@ -46,6 +53,40 @@ export async function generateSideChannelResponse(session, settings, text, deps 
   } catch {
     return "I heard the side-channel message, but I could not generate a quick answer.";
   }
+}
+
+async function runOllamaResponder(session, settings, text, deps = {}) {
+  const baseUrl = (settings.sideChannel?.ollama?.baseUrl || "http://127.0.0.1:11434").replace(/\/$/, "");
+  const model = settings.sideChannel?.ollama?.model || "llama3.2:3b";
+  const timeout = Number(settings.sideChannel?.timeoutMs || 6000);
+  const context = await readRecentThreadContext({ codexHome: deps.codexHome }, session, settings);
+  const prompt = [
+    "You are Codex Voice's fast spoken side-channel.",
+    "Answer in one short sentence. Be useful, casual, and do not mention implementation details unless asked.",
+    "Do not modify files or interact with the main thread.",
+    context ? "\nRecent main-thread context:\n" + context : "",
+    "",
+    `Side-channel message: ${text}`,
+  ].join("\n");
+
+  const fetchImpl = deps.fetch || globalThis.fetch;
+  const response = await fetchImpl(`${baseUrl}/api/generate`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model,
+      prompt,
+      stream: false,
+      options: {
+        num_predict: 80,
+        temperature: 0.3,
+      },
+    }),
+    signal: AbortSignal.timeout?.(timeout),
+  });
+  if (!response.ok) throw new Error(`ollama-http-${response.status}`);
+  const payload = await response.json();
+  return String(payload.response || "").trim();
 }
 
 async function runCodexExecResponder(session, settings, text, deps = {}) {
