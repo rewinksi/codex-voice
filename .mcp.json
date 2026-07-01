@@ -3,7 +3,7 @@
     "codex-voice": {
       "command": "node",
       "args": [
-        "scripts/mcp-server.mjs"
+        "./scripts/mcp-server.mjs"
       ],
       "note": "Local Codex Voice MCP tools for /voice on, /voice off, and /voice status."
     }

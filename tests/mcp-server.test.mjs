@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -19,6 +19,12 @@ function sqlite(args, options = {}) {
     });
   });
 }
+
+test("plugin MCP config uses plugin-root relative script paths", async () => {
+  const config = JSON.parse(await readFile(new URL("../.mcp.json", import.meta.url), "utf8"));
+  const args = config.mcpServers["codex-voice"].args;
+  assert.deepEqual(args, ["./scripts/mcp-server.mjs"]);
+});
 
 test("MCP tools/list exposes voice lifecycle tools", async () => {
   const response = await handleMcpRequest({

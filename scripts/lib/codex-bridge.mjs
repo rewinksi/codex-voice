@@ -114,7 +114,7 @@ export class CodexAppServerClient {
       clientInfo: {
         name: "codex_voice",
         title: "Codex Voice",
-        version: "0.1.2",
+        version: "0.1.3",
       },
       capabilities: {
         experimentalApi: true,

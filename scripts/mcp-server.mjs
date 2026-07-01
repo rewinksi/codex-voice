@@ -18,7 +18,7 @@ import { resolveTtsProvider, speakText } from "./lib/tts.mjs";
 
 const SERVER_INFO = {
   name: "codex-voice",
-  version: "0.1.2",
+  version: "0.1.3",
 };
 
 const TOOL_DEFS = [
