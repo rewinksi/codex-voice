@@ -22,7 +22,7 @@ export async function respondToSideChannel(options = {}, session, settings, text
   });
 
   if (settings.sideChannel?.speakImmediateAck !== false) {
-    await speakSideChannelText(buildSideChannelAckText(text), tts, settings, speechDeps);
+    await speakSideChannelText(buildSideChannelAckText(text, settings, { random: deps.random }), tts, settings, speechDeps);
   }
 
   const responseText = await responsePromise;
@@ -33,9 +33,10 @@ export async function respondToSideChannel(options = {}, session, settings, text
   return { ...spoken, text: spokenText };
 }
 
-export function buildSideChannelAckText(text) {
+export function buildSideChannelAckText(text, settings = {}, deps = {}) {
+  const acknowledgement = chooseAcknowledgement(settings, deps);
   const keywords = extractSubjectKeywords(text);
-  return keywords ? `Got it: ${keywords}.` : "Got it.";
+  return keywords ? `${acknowledgement}: ${keywords}.` : `${acknowledgement}.`;
 }
 
 export function resetSideChannelSpeechQueueForTests() {
@@ -84,6 +85,16 @@ function extractSubjectKeywords(text) {
     .filter((word) => word.length > 2 && word.length < 24 && !stopwords.has(word.toLowerCase()))
     .slice(0, 2);
   return words.join(" ");
+}
+
+function chooseAcknowledgement(settings, deps = {}) {
+  const words = settings.sideChannel?.acknowledgementWords;
+  const options = Array.isArray(words) && words.length
+    ? words.map((word) => String(word).trim()).filter(Boolean)
+    : ["Got it"];
+  const random = typeof deps.random === "function" ? deps.random : Math.random;
+  const index = Math.min(options.length - 1, Math.max(0, Math.floor(random() * options.length)));
+  return options[index] || "Got it";
 }
 
 export async function generateSideChannelResponse(session, settings, text, deps = {}) {

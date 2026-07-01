@@ -17,7 +17,7 @@ Codex Voice adds concise spoken summaries beside the main thread and a separate 
 - Treat normal main-thread user messages as the primary command path.
 - When voice is active, call `codex_voice_say` after substantive main-thread replies with a concise spoken summary.
 - Treat the external STT endpoint as an intentional adjacent side-channel source, not the main command path and not an ambient microphone.
-- Side-channel acknowledgements should be "Got it" plus one or two subject keywords, not a status sentence.
+- Side-channel acknowledgements should use a varied configured phrase plus one or two subject keywords, not a status sentence.
 - Main-thread summaries and side-channel speech must share one speech lane; never let them talk over each other.
 - Do not inject endpoint messages into the main thread or steer an active turn.
 

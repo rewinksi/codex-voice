@@ -18,6 +18,18 @@ export const DEFAULT_SETTINGS = Object.freeze({
   sideChannel: {
     responseMode: "lmstudio",
     speakImmediateAck: true,
+    acknowledgementWords: [
+      "Righto",
+      "Mmkay",
+      "Got it",
+      "Uh-huh",
+      "Mmm",
+      "Mm-hmm",
+      "Yeah nah ok",
+      "Gotcha",
+      "Sweet as",
+      "Mmm, your mother (what?)",
+    ],
     timeoutMs: 20000,
     maxResponseChars: 260,
     maxResponseTokens: 768,

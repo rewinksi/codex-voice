@@ -73,7 +73,7 @@ GET /healthz
 GET /v1/models
 ```
 
-Endpoint POSTs are side-channel only. They are recorded in `~/.codex/voice/side-channel.jsonl`, immediately acknowledged aloud with one or two subject keywords, answered aloud through a fast local LM Studio sidecar with recent thread context, and never call `turn/start`, `turn/steer`, or otherwise interrupt main-thread work. Ollama and a slower read-only `codex exec` sidecar remain available through settings.
+Endpoint POSTs are side-channel only. They are recorded in `~/.codex/voice/side-channel.jsonl`, immediately acknowledged aloud with a varied acknowledgement plus one or two subject keywords, answered aloud through a fast local LM Studio sidecar with recent thread context, and never call `turn/start`, `turn/steer`, or otherwise interrupt main-thread work. Ollama and a slower read-only `codex exec` sidecar remain available through settings.
 
 Main-thread speech is latest-only. When several assistant updates land while speech is already playing, Codex Voice drops the stale backlog and speaks only the newest useful summary after the current audio finishes.
 
@@ -93,6 +93,8 @@ Secrets belong in `voice_env`, not `settings.json`.
 ## Spoken Style
 
 Spoken personality is configurable in `~/.codex/voice/settings.json` under `voiceStyle`. Use it for local preferences such as concise kiwi humour, dry sarcasm, or stricter professional mode without hardcoding one personality for every install.
+
+Side-channel acknowledgement words are configurable under `sideChannel.acknowledgementWords`.
 
 ## Latency Notes
 

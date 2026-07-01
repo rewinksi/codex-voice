@@ -59,12 +59,33 @@ test("respondToSideChannel speaks a generated side-channel answer", async () => 
 
 test("buildSideChannelAckText references the side-channel subject briefly", () => {
   assert.equal(
-    buildSideChannelAckText("Can you check the LM Studio timeout thing?"),
+    buildSideChannelAckText("Can you check the LM Studio timeout thing?", {}, { random: () => 0.2 }),
     "Got it: LM Studio.",
   );
   assert.equal(
-    buildSideChannelAckText("Um, the side channel is still not answering"),
+    buildSideChannelAckText("Um, the side channel is still not answering", {}, { random: () => 0.2 }),
     "Got it: side channel.",
+  );
+});
+
+test("buildSideChannelAckText varies acknowledgement words from configured options", () => {
+  const settings = {
+    sideChannel: {
+      acknowledgementWords: ["Righto", "Sweet as", "Mmm, your mother (what?)"],
+    },
+  };
+
+  assert.equal(
+    buildSideChannelAckText("Gemma is answering now", settings, { random: () => 0 }),
+    "Righto: Gemma.",
+  );
+  assert.equal(
+    buildSideChannelAckText("Gemma is answering now", settings, { random: () => 0.5 }),
+    "Sweet as: Gemma.",
+  );
+  assert.equal(
+    buildSideChannelAckText("Gemma is answering now", settings, { random: () => 0.99 }),
+    "Mmm, your mother (what?): Gemma.",
   );
 });
 
@@ -101,6 +122,7 @@ test("respondToSideChannel leaves a breath between side-channel utterances", asy
           };
         },
         player: async () => {},
+        random: () => 0.2,
         sleep: async (ms) => {
           sleeps.push(ms);
         },
