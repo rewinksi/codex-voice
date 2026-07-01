@@ -9,6 +9,7 @@ import {
   startThreadWatcher,
   summarizeForSpeech,
 } from "../scripts/lib/thread-watch.mjs";
+import { resetSpeechQueueForTests } from "../scripts/lib/speech-queue.mjs";
 import { ensureSettings, saveSettings, writeVoiceEnv } from "../scripts/lib/settings.mjs";
 
 test("extractAssistantSpeechText reads assistant output text from rollout message lines", () => {
@@ -64,6 +65,7 @@ The full test suite is passing and the listener is restarted.
 });
 
 test("startThreadWatcher speaks newly appended assistant messages", async () => {
+  resetSpeechQueueForTests();
   const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-watch-"));
   const threadId = "thread-watch-a";
   const rolloutDir = path.join(codexHome, "sessions", "2026", "07", "01");
@@ -122,11 +124,13 @@ test("startThreadWatcher speaks newly appended assistant messages", async () => 
     watcher.stop();
     assert.equal(spoken.length, 1);
   } finally {
+    resetSpeechQueueForTests();
     await rm(codexHome, { recursive: true, force: true });
   }
 });
 
 test("startThreadWatcher coalesces rapid assistant messages and speaks only the latest", async () => {
+  resetSpeechQueueForTests();
   const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-watch-latest-"));
   const threadId = "thread-watch-latest";
   const rolloutDir = path.join(codexHome, "sessions", "2026", "07", "01");
@@ -189,6 +193,7 @@ test("startThreadWatcher coalesces rapid assistant messages and speaks only the 
     watcher.stop();
     assert.deepEqual(spokenTexts, ["Latest useful update."]);
   } finally {
+    resetSpeechQueueForTests();
     await rm(codexHome, { recursive: true, force: true });
   }
 });

@@ -3,12 +3,10 @@ import { mkdtemp, open, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { resolveTtsProvider, speakText } from "./tts.mjs";
+import { speakQueuedText, resetSpeechQueueForTests } from "./speech-queue.mjs";
+import { resolveTtsProvider } from "./tts.mjs";
 import { loadVoiceEnv } from "./settings.mjs";
 import { findRolloutPath, summarizeForSpeech } from "./thread-watch.mjs";
-
-let sideChannelSpeechQueue = Promise.resolve();
-let sideChannelHasSpoken = false;
 
 export async function respondToSideChannel(options = {}, session, settings, text, deps = {}) {
   const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env });
@@ -41,30 +39,11 @@ export function buildSideChannelAckText(text) {
 }
 
 export function resetSideChannelSpeechQueueForTests() {
-  sideChannelSpeechQueue = Promise.resolve();
-  sideChannelHasSpoken = false;
+  resetSpeechQueueForTests();
 }
 
 function speakSideChannelText(text, tts, settings, deps = {}) {
-  const gapMs = Number(settings.sideChannel?.speechGapMs ?? 250);
-  const run = sideChannelSpeechQueue.then(async () => {
-    if (sideChannelHasSpoken && gapMs > 0) {
-      await (deps.sleep || sleep)(gapMs);
-    }
-    const result = await speakText(text, tts, {
-      fetch: deps.fetch,
-      player: deps.player,
-      streamPlayer: deps.streamPlayer,
-    });
-    sideChannelHasSpoken = true;
-    return result;
-  });
-  sideChannelSpeechQueue = run.catch(() => {});
-  return run;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return speakQueuedText(text, tts, settings, deps);
 }
 
 function extractSubjectKeywords(text) {

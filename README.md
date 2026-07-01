@@ -77,6 +77,8 @@ Endpoint POSTs are side-channel only. They are recorded in `~/.codex/voice/side-
 
 Main-thread speech is latest-only. When several assistant updates land while speech is already playing, Codex Voice drops the stale backlog and speaks only the newest useful summary after the current audio finishes.
 
+All spoken output inside a listener process uses one shared speech queue, so side-channel acknowledgements, side-channel answers, and main-thread summaries do not talk over each other.
+
 ## TTS Providers
 
 Supported providers:

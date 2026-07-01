@@ -3,7 +3,8 @@ import path from "node:path";
 
 import { getCodexHome } from "./paths.mjs";
 import { ensureSettings } from "./settings.mjs";
-import { resolveTtsProvider, speakText } from "./tts.mjs";
+import { speakQueuedText } from "./speech-queue.mjs";
+import { resolveTtsProvider } from "./tts.mjs";
 
 export function extractAssistantSpeechText(line) {
   if (!line.trim()) return "";
@@ -115,7 +116,12 @@ export async function startThreadWatcher({ session, codexHome, intervalMs = 350,
       const text = pendingText;
       pendingText = "";
       const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env });
-      await speakText(text, tts, { fetch: deps.fetch, player: deps.player, streamPlayer: deps.streamPlayer });
+      await speakQueuedText(text, tts, settings, {
+        fetch: deps.fetch,
+        player: deps.player,
+        streamPlayer: deps.streamPlayer,
+        sleep: deps.sleep,
+      });
     } catch {
       // Keep the listener alive even if one speech attempt fails.
     } finally {

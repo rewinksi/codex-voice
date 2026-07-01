@@ -183,6 +183,7 @@ Main-thread path:
 - Normal main-thread messages are handled by Codex normally.
 - While voice is active, Codex calls `codex_voice_say` to speak a concise summary of the main-thread reply.
 - The automatic thread watcher coalesces rapid assistant output and speaks only the newest useful summary instead of queueing stale updates.
+- Side-channel speech and main-thread watcher speech use a shared queue, with a short breath between utterances, so they do not overlap.
 
 Implementation must prove that endpoint STT does not call `turn/start`, `turn/steer`, or any Codex app-server injection path.
 
