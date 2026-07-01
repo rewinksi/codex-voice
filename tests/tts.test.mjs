@@ -198,3 +198,45 @@ test("speakText streams ElevenLabs audio when streaming is enabled", async () =>
   assert.match(streamCall.url, /optimize_streaming_latency=3/);
   assert.equal(JSON.parse(streamCall.options.body).model_id, "eleven_flash_v2_5");
 });
+
+test("speakText caches ElevenLabs voice lookup within the listener process", async () => {
+  let voiceLookups = 0;
+  const provider = {
+    provider: "elevenlabs",
+    ready: true,
+    config: {
+      baseUrl: "https://api.elevenlabs.io",
+      voiceName: "Cache Voice",
+      model: "eleven_flash_v2_5",
+      responseFormat: "mp3_44100_128",
+      streaming: false,
+      hasApiKey: true,
+    },
+  };
+  Object.defineProperty(provider.config, "apiKey", {
+    value: "secret-key",
+    enumerable: false,
+  });
+
+  const deps = {
+    fetch: async (url) => {
+      if (String(url).endsWith("/v1/voices")) {
+        voiceLookups += 1;
+        return {
+          ok: true,
+          json: async () => ({ voices: [{ name: "Cache Voice", voice_id: "voice-1" }] }),
+        };
+      }
+      return {
+        ok: true,
+        arrayBuffer: async () => Buffer.from("audio").buffer,
+      };
+    },
+    player: async () => {},
+  };
+
+  await speakText("First", provider, deps);
+  await speakText("Second", provider, deps);
+
+  assert.equal(voiceLookups, 1);
+});

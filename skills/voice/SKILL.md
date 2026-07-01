@@ -9,10 +9,10 @@ Codex Voice adds concise spoken summaries beside the main thread and a separate 
 
 ## Operating Rules
 
-- Keep spoken output short and action-oriented.
+- Keep spoken output short, casual, and action-oriented.
 - Do not read long code blocks, logs, diffs, or stack traces aloud.
 - Put durable technical details in the thread.
-- Use voice for state changes, blockers, short questions, and confirmation.
+- Use voice for state changes, blockers, short questions, and confirmation. A little wit is fine; long narration is not.
 - Never speak or print secrets.
 - Treat normal main-thread user messages as the primary command path.
 - When voice is active, call `codex_voice_say` after substantive main-thread replies with a concise spoken summary.
@@ -23,7 +23,7 @@ Codex Voice adds concise spoken summaries beside the main thread and a separate 
 
 When the user runs `/voice on`, use the plugin MCP tool to start or reuse the current thread's voice session. The first visible line in the thread must be the listener endpoint.
 
-After `/voice on`, for each normal main-thread message the user sends, continue answering in the thread as usual and also call `codex_voice_say` with a short spoken summary. Use one or two sentences. If the response contains code, logs, diffs, or detailed commands, speak only the high-level result and next action.
+After `/voice on`, for each normal main-thread message the user sends, continue answering in the thread as usual and also call `codex_voice_say` with a short spoken summary. Use one quick sentence when possible. If the response contains code, logs, diffs, or detailed commands, speak only the high-level result and next action.
 
 When the user runs `/voice off`, stop only the current thread's voice session.
 

@@ -85,6 +85,7 @@ test("startThreadWatcher speaks newly appended assistant messages", async () => 
       session: { threadId, threadName: "Watch Test" },
       codexHome,
       intervalMs: 25,
+      settleMs: 30,
       deps: {
         fetch: async (url) => {
           if (String(url).endsWith("/v1/voices")) {
@@ -120,6 +121,73 @@ test("startThreadWatcher speaks newly appended assistant messages", async () => 
     await new Promise((resolve) => setTimeout(resolve, 150));
     watcher.stop();
     assert.equal(spoken.length, 1);
+  } finally {
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
+test("startThreadWatcher coalesces rapid assistant messages and speaks only the latest", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-watch-latest-"));
+  const threadId = "thread-watch-latest";
+  const rolloutDir = path.join(codexHome, "sessions", "2026", "07", "01");
+  const rolloutPath = path.join(rolloutDir, `rollout-2026-07-01T00-00-00-${threadId}.jsonl`);
+  const spokenTexts = [];
+
+  try {
+    await mkdir(rolloutDir, { recursive: true });
+    await writeFile(rolloutPath, `${JSON.stringify({ type: "session_meta", payload: { id: threadId } })}\n`);
+
+    const { settings } = await ensureSettings({ codexHome });
+    settings.tts.provider = "elevenlabs";
+    settings.tts.elevenlabs.voiceName = "Rachel";
+    settings.tts.elevenlabs.voiceId = "voice-1";
+    settings.tts.elevenlabs.streaming = false;
+    await saveSettings({ codexHome }, settings);
+    await writeVoiceEnv({ codexHome }, { ELEVENLABS_API_KEY: "test-key" });
+
+    const watcher = await startThreadWatcher({
+      session: { threadId, threadName: "Watch Test" },
+      codexHome,
+      intervalMs: 15,
+      settleMs: 30,
+      deps: {
+        fetch: async (url, options = {}) => {
+          assert.equal(String(url).endsWith("/v1/voices"), false);
+          if (String(url).includes("/v1/text-to-speech/voice-1")) {
+            spokenTexts.push(JSON.parse(options.body).text);
+          }
+          return {
+            ok: true,
+            arrayBuffer: async () => Buffer.from("audio").buffer,
+          };
+        },
+        player: async () => {},
+      },
+    });
+
+    assert.equal(watcher.started, true);
+    await appendFile(
+      rolloutPath,
+      `${JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "First stale update." }],
+        },
+      })}\n${JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "Latest useful update." }],
+        },
+      })}\n`,
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    watcher.stop();
+    assert.deepEqual(spokenTexts, ["Latest useful update."]);
   } finally {
     await rm(codexHome, { recursive: true, force: true });
   }

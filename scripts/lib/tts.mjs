@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { Readable } from "node:stream";
 
@@ -12,6 +13,7 @@ import {
 } from "./settings.mjs";
 
 const SUPERTONIC_DEFAULT = DEFAULT_SETTINGS.tts.supertonic;
+const elevenLabsVoiceIdCache = new Map();
 
 async function probeBaseUrl(baseUrl, fetchImpl) {
   try {
@@ -39,6 +41,7 @@ function publicElevenLabsConfig(config, hasApiKey) {
   return {
     baseUrl: config.baseUrl,
     voiceName: config.voiceName,
+    voiceId: config.voiceId,
     model: config.model,
     responseFormat: config.responseFormat,
     streaming: config.streaming !== false,
@@ -113,7 +116,7 @@ function resolveElevenLabs(settings, voiceEnv, env) {
   };
   const apiKey = voiceEnv.ELEVENLABS_API_KEY || env.ELEVENLABS_API_KEY || "";
   const missing = [];
-  if (!elevenlabs.voiceName) missing.push("tts.elevenlabs.voiceName");
+  if (!elevenlabs.voiceName && !elevenlabs.voiceId) missing.push("tts.elevenlabs.voiceName");
   if (!apiKey) missing.push("ELEVENLABS_API_KEY");
 
   const config = publicElevenLabsConfig(elevenlabs, Boolean(apiKey));
@@ -170,7 +173,7 @@ async function speakWithElevenLabs(text, config, deps = {}) {
   if (!config?.apiKey) return { spoken: false, reason: "elevenlabs-api-key-missing" };
 
   const baseUrl = (config.baseUrl || "https://api.elevenlabs.io").replace(/\/$/, "");
-  const voiceId = await findElevenLabsVoiceId(baseUrl, config, fetchImpl);
+  const voiceId = config.voiceId || await resolveElevenLabsVoiceId(baseUrl, config, fetchImpl);
   if (!voiceId) return { spoken: false, reason: "elevenlabs-voice-not-found" };
 
   const outputFormat = config.responseFormat || "mp3_44100_128";
@@ -248,6 +251,26 @@ async function findElevenLabsVoiceId(baseUrl, config, fetchImpl) {
     return String(voice.name || "").trim().toLowerCase() === requested;
   });
   return match?.voice_id || null;
+}
+
+async function resolveElevenLabsVoiceId(baseUrl, config, fetchImpl) {
+  const key = elevenLabsVoiceCacheKey(baseUrl, config);
+  if (elevenLabsVoiceIdCache.has(key)) return elevenLabsVoiceIdCache.get(key);
+  const voiceId = await findElevenLabsVoiceId(baseUrl, config, fetchImpl);
+  if (voiceId) elevenLabsVoiceIdCache.set(key, voiceId);
+  return voiceId;
+}
+
+function elevenLabsVoiceCacheKey(baseUrl, config) {
+  const keyHash = createHash("sha256")
+    .update(String(config.apiKey || ""))
+    .digest("hex")
+    .slice(0, 12);
+  return [
+    baseUrl,
+    String(config.voiceName || "").trim().toLowerCase(),
+    keyHash,
+  ].join("\0");
 }
 
 async function playAudio(audio, responseFormat, deps = {}) {

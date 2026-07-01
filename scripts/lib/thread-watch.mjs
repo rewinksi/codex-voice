@@ -2,6 +2,7 @@ import { stat, open, readdir } from "node:fs/promises";
 import path from "node:path";
 
 import { getCodexHome } from "./paths.mjs";
+import { ensureSettings } from "./settings.mjs";
 import { resolveTtsProvider, speakText } from "./tts.mjs";
 
 export function extractAssistantSpeechText(line) {
@@ -77,7 +78,7 @@ async function walkForSuffix(dir, suffix) {
   return null;
 }
 
-export async function startThreadWatcher({ session, codexHome, intervalMs = 1000, deps = {} }) {
+export async function startThreadWatcher({ session, codexHome, intervalMs = 350, settleMs, deps = {} }) {
   const options = { codexHome };
   const rolloutPath = await findRolloutPath(options, session.threadId);
   if (!rolloutPath) {
@@ -87,20 +88,34 @@ export async function startThreadWatcher({ session, codexHome, intervalMs = 1000
   let offset = (await stat(rolloutPath)).size;
   let buffer = "";
   let busy = false;
+  let pendingText = "";
+  let pendingUpdatedAt = 0;
 
   const timer = setInterval(async () => {
     if (busy) return;
     busy = true;
     try {
+      const { settings } = await ensureSettings(options);
+      const summarySettings = settings.mainThreadSummary || {};
+      const maxChars = Number(summarySettings.maxChars || 140);
+      const quietMs = Number(settleMs ?? summarySettings.settleMs ?? 450);
       const result = await readNewLines(rolloutPath, offset, buffer);
       offset = result.offset;
       buffer = result.buffer;
-      for (const line of result.lines) {
-        const text = summarizeForSpeech(extractAssistantSpeechText(line));
-        if (!text) continue;
-        const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env });
-        await speakText(text, tts, { fetch: deps.fetch, player: deps.player, streamPlayer: deps.streamPlayer });
+      const candidates = result.lines
+        .map((line) => summarizeForSpeech(extractAssistantSpeechText(line), maxChars))
+        .filter(Boolean);
+      if (candidates.length) {
+        pendingText = candidates.at(-1);
+        pendingUpdatedAt = Date.now();
       }
+
+      if (!pendingText || Date.now() - pendingUpdatedAt < quietMs) return;
+
+      const text = pendingText;
+      pendingText = "";
+      const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env });
+      await speakText(text, tts, { fetch: deps.fetch, player: deps.player, streamPlayer: deps.streamPlayer });
     } catch {
       // Keep the listener alive even if one speech attempt fails.
     } finally {

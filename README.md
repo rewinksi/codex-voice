@@ -75,6 +75,8 @@ GET /v1/models
 
 Endpoint POSTs are side-channel only. They are recorded in `~/.codex/voice/side-channel.jsonl`, immediately acknowledged aloud, answered aloud through a fast local LM Studio sidecar with recent thread context, and never call `turn/start`, `turn/steer`, or otherwise interrupt main-thread work. Ollama and a slower read-only `codex exec` sidecar remain available through settings.
 
+Main-thread speech is latest-only. When several assistant updates land while speech is already playing, Codex Voice drops the stale backlog and speaks only the newest useful summary after the current audio finishes.
+
 ## TTS Providers
 
 Supported providers:
@@ -88,7 +90,7 @@ Secrets belong in `voice_env`, not `settings.json`.
 
 ## Latency Notes
 
-The fastest perceived loop comes from short spoken summaries, a warm local TTS service, and avoiding long code/log narration. Supertonic is local but currently returns complete audio rather than streaming partial audio. ElevenLabs uses the HTTP speech streaming endpoint by default when `tts.provider` is `elevenlabs`, piping audio to `ffplay` or `mpv` when available and falling back to buffered playback otherwise.
+The fastest perceived loop comes from short spoken summaries, latest-only speech, a warm local TTS service, and avoiding long code/log narration. The watcher uses a short debounce so fast tool chatter collapses into one current update. ElevenLabs voice IDs are reused when configured and cached after lookup, avoiding repeated `/v1/voices` calls. Supertonic is local but currently returns complete audio rather than streaming partial audio. ElevenLabs uses the HTTP speech streaming endpoint by default when `tts.provider` is `elevenlabs`, piping audio to `ffplay` or `mpv` when available and falling back to buffered playback otherwise.
 
 ElevenLabs also offers WebSocket input streaming. That is best suited for partial text generation or word-alignment workflows; Codex Voice uses HTTP streaming first because spoken summaries are usually complete short phrases.
 

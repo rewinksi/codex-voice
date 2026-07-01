@@ -31,6 +31,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
       model: "llama3.2:3b",
     },
   },
+  mainThreadSummary: {
+    maxChars: 140,
+    settleMs: 450,
+  },
   tts: {
     provider: "supertonic",
     speakOnOnline: true,
@@ -44,6 +48,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     elevenlabs: {
       baseUrl: "https://api.elevenlabs.io",
       voiceName: "",
+      voiceId: "",
       model: "eleven_flash_v2_5",
       responseFormat: "mp3_44100_128",
       streaming: true,
