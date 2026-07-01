@@ -110,3 +110,18 @@ export async function releaseSession(options = {}, threadId) {
   await saveSessions(options, registry);
   return released;
 }
+
+export async function setSessionPid(options = {}, threadId, pid) {
+  const registry = await loadSessions(options);
+  const session = registry.sessions[threadId];
+  if (!session) return null;
+
+  const updated = {
+    ...session,
+    pid,
+    updatedAt: new Date().toISOString(),
+  };
+  registry.sessions[threadId] = updated;
+  await saveSessions(options, registry);
+  return updated;
+}

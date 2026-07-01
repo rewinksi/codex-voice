@@ -26,6 +26,11 @@ export function getLogsDir(options = {}) {
   return path.join(getVoiceDir(options), "logs");
 }
 
+export function getRuntimeSessionPath(options = {}, threadId) {
+  const safeThreadId = String(threadId || "unknown").replace(/[^a-zA-Z0-9_.-]/g, "_");
+  return path.join(getVoiceDir(options), `session-${safeThreadId}.json`);
+}
+
 export async function ensureVoiceDir(options = {}) {
   const voiceDir = getVoiceDir(options);
   await mkdir(voiceDir, { recursive: true, mode: 0o700 });
