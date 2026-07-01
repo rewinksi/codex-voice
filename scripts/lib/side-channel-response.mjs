@@ -58,7 +58,6 @@ function extractSubjectKeywords(text) {
 
   const preferred = [
     ["LM Studio", /\blm\s+studio\b/i],
-    ["side channel", /\bside\s+channel\b/i],
     ["ElevenLabs", /\beleven\s*labs\b/i],
     ["Supertonic", /\bsupertonic\b/i],
     ["Gemma", /\bgemma\b/i],
@@ -78,7 +77,7 @@ function extractSubjectKeywords(text) {
   const stopwords = new Set([
     "a", "an", "and", "are", "as", "at", "be", "but", "can", "could", "for", "from", "get",
     "got", "have", "how", "i", "is", "it", "just", "me", "of", "on", "or", "please", "say",
-    "that", "the", "this", "to", "um", "we", "what", "when", "with", "you",
+    "answering", "channel", "not", "side", "still", "that", "the", "this", "to", "um", "we", "what", "when", "with", "you",
   ]);
   const words = cleaned
     .split(/\s+/)

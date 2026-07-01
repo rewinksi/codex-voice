@@ -64,7 +64,11 @@ test("buildSideChannelAckText references the side-channel subject briefly", () =
   );
   assert.equal(
     buildSideChannelAckText("Um, the side channel is still not answering", {}, { random: () => 0.2 }),
-    "Got it: side channel.",
+    "Got it.",
+  );
+  assert.equal(
+    buildSideChannelAckText("Side channel smoke: is Gemma answering?", {}, { random: () => 0.2 }),
+    "Got it: Gemma.",
   );
 });
 
