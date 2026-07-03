@@ -60,6 +60,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   tts: {
     provider: "supertonic",
     speakOnOnline: true,
+    globalLock: true,
     supertonic: {
       baseUrl: "http://127.0.0.1:7788",
       path: "/v1/tts",
@@ -78,6 +79,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
       streamPlayer: "auto",
     },
   },
+  threadSettings: {},
 });
 
 function clone(value) {
@@ -144,6 +146,35 @@ export function settingsSignature(settings) {
   return createHash("sha256")
     .update(JSON.stringify(settings || {}))
     .digest("hex");
+}
+
+export function getThreadSettings(settings = {}, threadId) {
+  if (!threadId) return {};
+  return settings.threadSettings?.[threadId] || {};
+}
+
+export function ensureThreadSettings(settings, threadId) {
+  if (!threadId) throw new Error("threadId is required");
+  if (!settings.threadSettings || typeof settings.threadSettings !== "object" || Array.isArray(settings.threadSettings)) {
+    settings.threadSettings = {};
+  }
+  if (!settings.threadSettings[threadId] || typeof settings.threadSettings[threadId] !== "object") {
+    settings.threadSettings[threadId] = {};
+  }
+  return settings.threadSettings[threadId];
+}
+
+export function isThreadMuted(settings = {}, threadId) {
+  return Boolean(getThreadSettings(settings, threadId).muted);
+}
+
+export function effectiveSettingsForThread(settings = {}, threadId) {
+  const effective = clone(settings);
+  const thread = getThreadSettings(settings, threadId);
+  if (thread.tts && typeof thread.tts === "object") {
+    effective.tts = mergeDefaults(effective.tts || {}, thread.tts);
+  }
+  return effective;
 }
 
 export function parseVoiceEnv(raw) {

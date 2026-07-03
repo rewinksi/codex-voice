@@ -35,6 +35,10 @@ export function getRuntimeSessionPath(options = {}, threadId) {
   return path.join(getVoiceDir(options), `session-${safeThreadId}.json`);
 }
 
+export function getSpeechLockPath(options = {}) {
+  return path.join(getVoiceDir(options), "tts-speaking.lock");
+}
+
 export async function ensureVoiceDir(options = {}) {
   const voiceDir = getVoiceDir(options);
   await mkdir(voiceDir, { recursive: true, mode: 0o700 });

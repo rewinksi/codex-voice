@@ -1,8 +1,8 @@
 import { stat, open, readdir } from "node:fs/promises";
 import path from "node:path";
 
-import { getCodexHome } from "./paths.mjs";
-import { ensureSettings } from "./settings.mjs";
+import { getCodexHome, getSpeechLockPath } from "./paths.mjs";
+import { effectiveSettingsForThread, ensureSettings, isThreadMuted } from "./settings.mjs";
 import { speakQueuedText } from "./speech-queue.mjs";
 import { resolveTtsProvider } from "./tts.mjs";
 
@@ -115,6 +115,8 @@ export async function startThreadWatcher({ session, codexHome, intervalMs = 350,
     busy = true;
     try {
       const { settings } = await ensureSettings(options);
+      if (isThreadMuted(settings, session.threadId)) return;
+      const effectiveSettings = effectiveSettingsForThread(settings, session.threadId);
       const summarySettings = settings.mainThreadSummary || {};
       const maxChars = Number(summarySettings.maxChars || 140);
       const quietMs = Number(settleMs ?? summarySettings.settleMs ?? 450);
@@ -135,12 +137,13 @@ export async function startThreadWatcher({ session, codexHome, intervalMs = 350,
 
       const text = pendingText;
       pendingText = "";
-      const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env });
-      await speakQueuedText(text, tts, settings, {
+      const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env, threadId: session.threadId });
+      await speakQueuedText(text, tts, effectiveSettings, {
         fetch: deps.fetch,
         player: deps.player,
         streamPlayer: deps.streamPlayer,
         sleep: deps.sleep,
+        lockPath: getSpeechLockPath(options),
       });
     } catch {
       // Keep the listener alive even if one speech attempt fails.

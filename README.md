@@ -6,7 +6,7 @@
 
 Codex Voice is a Codex plugin that adds a native `/voice` command for per-thread spoken summaries and adjacent side-channel input. Pair it with OpenScreech for a versatile, customizable STT utility and Supertonic for local TTS; ElevenLabs is supported as a hosted TTS alternative.
 
-Normal main-thread input remains the primary command path. When voice is active, Codex keeps technical work in the thread and speaks concise summaries of main-thread replies. External STT/PTT clients can post adjacent questions or notes to the displayed local endpoint without interrupting active main-thread work.
+Normal main-thread input remains the primary command path. When voice is active, Codex keeps technical work in the thread and speaks concise milestone summaries of main-thread replies. External STT/PTT clients can post adjacent questions or notes to the displayed local endpoint without interrupting active main-thread work.
 
 <p align="center">
   <img src="docs/illustrations/02-infographic-spoken-summaries.svg" alt="Feature card for spoken summaries." width="31%" />
@@ -16,9 +16,9 @@ Normal main-thread input remains the primary command path. When voice is active,
 
 ## Status
 
-This repository contains the plugin scaffold, native `/voice` command, MCP lifecycle tools, per-thread port allocation, settings/secrets handling, TTS provider resolution, local side-channel STT listener, automatic thread watcher, spoken-summary tool, and Git marketplace metadata for distribution.
+This repository contains the plugin scaffold, native `/voice` command, MCP lifecycle tools, per-thread port allocation, per-thread voice setup, mute controls, settings/secrets handling, TTS provider resolution, local side-channel STT listener, automatic thread watcher, spoken-summary tool, and Git marketplace metadata for distribution.
 
-The installed plugin path has been smoke-tested locally: `/voice on` starts a listener, speaks the online announcement through the configured TTS provider, accepts OpenAI-compatible side-channel STT POSTs, records them without starting or steering the main Codex thread, answers them aloud through a fast local LM Studio sidecar by default, and tails the active thread rollout so assistant text is spoken automatically.
+The installed plugin path has been smoke-tested locally: `/voice on` starts a listener, says `Voice active`, accepts OpenAI-compatible side-channel STT POSTs, records them without starting or steering the main Codex thread, answers them aloud through a fast local LM Studio sidecar by default, and tails the active thread rollout so milestone-level assistant updates can be spoken without narrating routine progress chatter.
 
 ## Install
 
@@ -43,8 +43,13 @@ Start a new Codex thread after installing or reinstalling so the `/voice` comman
 - `/voice on`
 - `/voice off`
 - `/voice status`
+- `/voice mute`
+- `/voice unmute`
+- `/voice setup`
 
 `/voice on` must print the listener endpoint as the first visible line. Configure an adjacent-question push-to-talk STT client to send OpenAI-compatible chat completion requests to that endpoint. Keep your primary main-thread PTT button configured to type or submit directly into Codex.
+
+`/voice mute` silences spoken output for the current thread while keeping its side-channel listener active. `/voice setup` shows the current thread's TTS settings and can store a distinct Supertonic or ElevenLabs voice for that thread.
 
 ## Local Files
 
@@ -87,9 +92,9 @@ GET /v1/models
 
 Endpoint POSTs are side-channel only. They are recorded in `~/.codex/voice/side-channel.jsonl`, immediately acknowledged aloud with a varied short phrase, answered aloud through a fast local LM Studio sidecar with recent thread context, and never call `turn/start`, `turn/steer`, or otherwise interrupt main-thread work. Ollama and a slower read-only `codex exec` sidecar remain available through settings.
 
-Main-thread speech is latest-only. When several assistant updates land while speech is already playing, Codex Voice drops the stale backlog and speaks only the newest useful summary after the current audio finishes.
+Main-thread speech is milestone-only by default. When several assistant updates land while speech is already playing, Codex Voice drops the stale backlog and speaks only the newest useful milestone after the current audio finishes.
 
-All spoken output inside a listener process uses one shared speech queue, so side-channel acknowledgements, side-channel answers, and main-thread summaries do not talk over each other.
+All spoken output uses a shared speech queue and a filesystem TTS lock under `~/.codex/voice`, so side-channel acknowledgements, side-channel answers, and main-thread summaries do not talk over each other even when multiple threads have active listeners.
 
 ## TTS Providers
 
@@ -101,6 +106,8 @@ Supported providers:
 For STT, this plugin expects an external push-to-talk client. OpenScreech is a good pairing when you want a versatile and customizable local STT utility that can target the displayed listener endpoint.
 
 Secrets belong in `voice_env`, not `settings.json`.
+
+Per-thread voice choices live in `settings.json` under `threadSettings`. They override the global `tts` defaults for that thread only, so simultaneous voice sessions can use different voices.
 
 ## Spoken Style
 

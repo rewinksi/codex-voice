@@ -19,6 +19,9 @@ Supported subcommands:
 - `/voice on`: create or reuse the thread voice session.
 - `/voice off`: stop the current thread voice session.
 - `/voice status`: show the current listener, provider, and session state.
+- `/voice mute`: mute spoken output for the current thread without stopping the listener.
+- `/voice unmute`: re-enable spoken output for the current thread.
+- `/voice setup`: show or update per-thread TTS provider and voice settings.
 
 On `/voice on`, the first visible line in the thread must be:
 
@@ -32,7 +35,7 @@ After the endpoint is visible, Codex may print concise setup status and speak:
 Voice active
 ```
 
-While voice is active, Codex should answer normal main-thread user messages in the thread as usual and call `codex_voice_say` with a short spoken summary after substantive replies. Spoken summaries must avoid code, logs, diffs, long command output, and secrets.
+While voice is active, Codex should answer normal main-thread user messages in the thread as usual and call `codex_voice_say` only for milestone-level replies. Spoken summaries must avoid routine progress chatter, code, logs, diffs, long command output, and secrets.
 
 ## Port And Session Model
 
@@ -106,6 +109,7 @@ If `settings.json` does not exist, `/voice on` creates it with safe defaults:
   "tts": {
     "provider": "supertonic",
     "speakOnOnline": true,
+    "globalLock": true,
     "supertonic": {
       "baseUrl": "http://127.0.0.1:7788",
       "path": "/v1/tts",
@@ -123,7 +127,8 @@ If `settings.json` does not exist, `/voice on` creates it with safe defaults:
       "optimizeStreamingLatency": 3,
       "streamPlayer": "auto"
     }
-  }
+  },
+  "threadSettings": {}
 }
 ```
 
@@ -197,7 +202,7 @@ Main-thread path:
 - Normal main-thread messages are handled by Codex normally.
 - While voice is active, Codex calls `codex_voice_say` to speak a concise summary of the main-thread reply.
 - The automatic thread watcher coalesces rapid assistant output and speaks only milestone summaries by default instead of narrating every progress note.
-- Side-channel speech and main-thread watcher speech use a shared queue, with a short breath between utterances, so they do not overlap.
+- Side-channel speech and main-thread watcher speech use a shared queue plus a filesystem TTS lock, with a short breath between utterances, so they do not overlap across active thread listener processes.
 
 Implementation must prove that endpoint STT does not call `turn/start`, `turn/steer`, or any Codex app-server injection path.
 
@@ -239,10 +244,7 @@ Minimum verification before completion:
 - Listener records endpoint payloads as side-channel messages without main-thread injection.
 - Listener health endpoints work.
 - `codex_voice_say` speaks summaries only for active voice sessions.
+- `/voice mute` suppresses TTS without stopping the listener.
+- `/voice setup` stores per-thread voice settings that override global TTS defaults.
+- Cross-thread TTS uses a shared lock so listeners do not speak over each other.
 - `/voice off` stops the listener and releases the active session.
-
-## Queued Follow-Ups
-
-- Add `/voice mute` as a standard accessible setting.
-- Add a cross-thread TTS activity lock so multiple active threads never speak over each other.
-- Add `/voice setup` for per-thread TTS configuration, including easy voice selection so each active thread can have a distinct voice.

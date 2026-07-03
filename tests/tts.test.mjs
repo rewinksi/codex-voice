@@ -86,6 +86,41 @@ test("resolveTtsProvider accepts ElevenLabs key from voice_env", async () => {
   }
 });
 
+test("resolveTtsProvider applies per-thread ElevenLabs voice overrides", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-tts-thread-voice-"));
+  try {
+    const { settings } = await ensureSettings({ codexHome });
+    settings.tts.provider = "supertonic";
+    settings.threadSettings = {
+      "thread-voice-a": {
+        tts: {
+          provider: "elevenlabs",
+          elevenlabs: {
+            voiceName: "Thread Voice",
+            voiceId: "voice-thread",
+            model: "eleven_turbo_v2_5",
+          },
+        },
+      },
+    };
+    await saveSettings({ codexHome }, settings);
+    await writeVoiceEnv({ codexHome }, { ELEVENLABS_API_KEY: "test-key" });
+
+    const result = await resolveTtsProvider({ codexHome }, {
+      threadId: "thread-voice-a",
+      fetch: async () => ({ status: 404 }),
+    });
+
+    assert.equal(result.provider, "elevenlabs");
+    assert.equal(result.ready, true);
+    assert.equal(result.config.voiceName, "Thread Voice");
+    assert.equal(result.config.voiceId, "voice-thread");
+    assert.equal(result.config.model, "eleven_turbo_v2_5");
+  } finally {
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
 test("speakText uses ElevenLabs voice lookup without serializing the API key", async () => {
   const calls = [];
   const played = [];

@@ -80,6 +80,33 @@ test("voice listener records side-channel text without injecting into Codex", as
   }
 });
 
+test("voice listener uses latest settings for side-channel responses", async () => {
+  const responded = [];
+  const server = createVoiceServer({
+    session: { threadId: "thread-a", threadName: "Alpha", port: 0 },
+    settings: { host: "127.0.0.1", stt: {}, marker: "stale" },
+    settingsLoader: async () => ({ host: "127.0.0.1", stt: {}, marker: "fresh" }),
+    sideChannelResponder: async ({ settings, text }) => {
+      responded.push({ marker: settings.marker, text });
+    },
+  });
+  const port = await listen(server);
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "use fresh settings" }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(responded, [{ marker: "fresh", text: "use fresh settings" }]);
+  } finally {
+    await close(server);
+  }
+});
+
 test("voice listener rejects requests without configured bearer token", async () => {
   const server = createVoiceServer({
     session: { threadId: "thread-a", threadName: "Alpha", port: 0 },

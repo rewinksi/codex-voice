@@ -6,16 +6,24 @@ import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { getLogsDir, getRuntimeSessionPath } from "./lib/paths.mjs";
-import { ensureSettings, settingsSignature } from "./lib/settings.mjs";
+import { getLogsDir, getRuntimeSessionPath, getSpeechLockPath } from "./lib/paths.mjs";
+import {
+  effectiveSettingsForThread,
+  ensureSettings,
+  ensureThreadSettings,
+  isThreadMuted,
+  saveSettings,
+  settingsSignature,
+} from "./lib/settings.mjs";
 import {
   allocateSession,
   loadSessions,
   releaseSession,
   setSessionPid,
 } from "./lib/sessions.mjs";
+import { speakQueuedText } from "./lib/speech-queue.mjs";
 import { summarizeForSpeech } from "./lib/thread-watch.mjs";
-import { resolveTtsProvider, speakText } from "./lib/tts.mjs";
+import { resolveTtsProvider } from "./lib/tts.mjs";
 
 const SERVER_INFO = {
   name: "codex-voice",
@@ -68,6 +76,37 @@ const TOOL_DEFS = [
         text: { type: "string", description: "Short spoken summary. Do not include secrets, code, logs, or long output." },
       },
       required: ["text"],
+    },
+  },
+  {
+    name: "codex_voice_mute",
+    description: "Mute, unmute, or toggle spoken output for the current thread while keeping its listener active.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        threadId: { type: "string", description: "Current Codex thread id." },
+        cwd: { type: "string", description: "Current thread working directory." },
+        muted: { type: "boolean", description: "Set mute state. Omit to toggle." },
+      },
+    },
+  },
+  {
+    name: "codex_voice_setup",
+    description: "Show or update per-thread Codex Voice TTS settings.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        threadId: { type: "string", description: "Current Codex thread id." },
+        threadName: { type: "string", description: "User-facing thread title." },
+        cwd: { type: "string", description: "Current thread working directory." },
+        provider: { type: "string", enum: ["supertonic", "elevenlabs"], description: "Per-thread TTS provider." },
+        voiceName: { type: "string", description: "ElevenLabs voice name for this thread." },
+        voiceId: { type: "string", description: "ElevenLabs voice id for this thread." },
+        model: { type: "string", description: "ElevenLabs model id for this thread." },
+        supertonicVoice: { type: "string", description: "Supertonic voice for this thread." },
+        muted: { type: "boolean", description: "Set the per-thread mute state." },
+        clear: { type: "boolean", description: "Clear per-thread voice settings and return to global defaults." },
+      },
     },
   },
 ];
@@ -244,7 +283,7 @@ async function voiceOn(args, deps) {
   const options = { codexHome: deps.codexHome };
   const thread = await resolveThread(args, deps);
   const { settings } = await ensureSettings(options);
-  const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env });
+  const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env, threadId: thread.threadId });
   const registry = await loadSessions(options);
   const current = registry.sessions[thread.threadId];
   const isProcessAlive = deps.isProcessAlive || defaultIsProcessAlive;
@@ -274,8 +313,14 @@ async function voiceOn(args, deps) {
   session = await setSessionPid(options, thread.threadId, started.pid ?? null);
 
   const onlineText = "Voice active";
-  if (settings.tts?.speakOnOnline && tts.ready) {
-    await speakText(onlineText, tts, { fetch: deps.fetch, player: deps.player });
+  if (settings.tts?.speakOnOnline && tts.ready && !isThreadMuted(settings, thread.threadId)) {
+    await speakQueuedText(onlineText, tts, settings, {
+      fetch: deps.fetch,
+      player: deps.player,
+      streamPlayer: deps.streamPlayer,
+      sleep: deps.sleep,
+      lockPath: getSpeechLockPath(options),
+    });
   }
 
   const missing = tts.missing?.length ? `\nMissing setup: ${tts.missing.join(", ")}` : "";
@@ -291,6 +336,7 @@ async function voiceOn(args, deps) {
 async function voiceStatus(args, deps) {
   const options = { codexHome: deps.codexHome };
   const thread = await resolveThread(args, deps);
+  const { settings } = await ensureSettings(options);
   const registry = await loadSessions(options);
   const session = registry.sessions[thread.threadId];
   if (!session) {
@@ -302,6 +348,7 @@ async function voiceStatus(args, deps) {
       `Thread: ${session.threadName}`,
       `Endpoint: ${session.endpoint}`,
       `PID: ${session.pid || "none"}`,
+      `Muted: ${isThreadMuted(settings, session.threadId) ? "yes" : "no"}`,
     ].join("\n"),
     { session },
   );
@@ -333,6 +380,7 @@ async function voiceSay(args, deps) {
 
   const options = { codexHome: deps.codexHome };
   const thread = await resolveThread(args, deps);
+  const { settings } = await ensureSettings(options);
   const registry = await loadSessions(options);
   const session = registry.sessions[thread.threadId];
   if (!session?.active) {
@@ -342,12 +390,111 @@ async function voiceSay(args, deps) {
     });
   }
 
-  const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env });
-  const spoken = await speakText(text, tts, { fetch: deps.fetch, player: deps.player });
+  if (isThreadMuted(settings, thread.threadId)) {
+    return textResult(`Spoken summary for ${session.threadName}: voice-muted`, {
+      session,
+      spoken: { spoken: false, reason: "voice-muted" },
+    });
+  }
+
+  const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env, threadId: thread.threadId });
+  const effectiveSettings = effectiveSettingsForThread(settings, thread.threadId);
+  const spoken = await speakQueuedText(text, tts, effectiveSettings, {
+    fetch: deps.fetch,
+    player: deps.player,
+    streamPlayer: deps.streamPlayer,
+    sleep: deps.sleep,
+    lockPath: getSpeechLockPath(options),
+  });
   return textResult(
     `Spoken summary for ${session.threadName}: ${spoken.spoken ? "ok" : spoken.reason}`,
     { session, tts, spoken },
   );
+}
+
+async function voiceMute(args, deps) {
+  const options = { codexHome: deps.codexHome };
+  const thread = await resolveThread(args, deps);
+  const { settings } = await ensureSettings(options);
+  const registry = await loadSessions(options);
+  const threadName = registry.sessions[thread.threadId]?.threadName || thread.threadName;
+  const threadSettings = ensureThreadSettings(settings, thread.threadId);
+  const muted = typeof args.muted === "boolean" ? args.muted : !Boolean(threadSettings.muted);
+  threadSettings.muted = muted;
+  await saveSettings(options, settings);
+  return textResult(
+    `Voice ${muted ? "muted" : "unmuted"} for ${threadName}`,
+    { thread: { ...thread, threadName }, muted },
+  );
+}
+
+async function voiceSetup(args, deps) {
+  const options = { codexHome: deps.codexHome };
+  const thread = await resolveThread(args, deps);
+  const { settings } = await ensureSettings(options);
+  const registry = await loadSessions(options);
+  const threadName = registry.sessions[thread.threadId]?.threadName || thread.threadName;
+  const threadSettings = ensureThreadSettings(settings, thread.threadId);
+
+  if (args.clear) delete threadSettings.tts;
+  if (typeof args.muted === "boolean") threadSettings.muted = args.muted;
+
+  const provider = normalizeProvider(args.provider);
+  if (provider) {
+    threadSettings.tts = {
+      ...(threadSettings.tts || {}),
+      provider,
+    };
+  }
+  if (args.voiceName || args.voiceId || args.model) {
+    threadSettings.tts = {
+      ...(threadSettings.tts || {}),
+      provider: "elevenlabs",
+      elevenlabs: {
+        ...(threadSettings.tts?.elevenlabs || {}),
+      },
+    };
+    if (args.voiceName) threadSettings.tts.elevenlabs.voiceName = String(args.voiceName).trim();
+    if (args.voiceId) threadSettings.tts.elevenlabs.voiceId = String(args.voiceId).trim();
+    if (args.model) threadSettings.tts.elevenlabs.model = String(args.model).trim();
+  }
+  if (args.supertonicVoice) {
+    threadSettings.tts = {
+      ...(threadSettings.tts || {}),
+      provider: "supertonic",
+      supertonic: {
+        ...(threadSettings.tts?.supertonic || {}),
+        voice: String(args.supertonicVoice).trim(),
+      },
+    };
+  }
+
+  await saveSettings(options, settings);
+  const effectiveSettings = effectiveSettingsForThread(settings, thread.threadId);
+  const providerName = effectiveSettings.tts?.provider || "supertonic";
+  const voiceName = providerName === "elevenlabs"
+    ? effectiveSettings.tts?.elevenlabs?.voiceName || effectiveSettings.tts?.elevenlabs?.voiceId || "not set"
+    : effectiveSettings.tts?.supertonic?.voice || "not set";
+  const muted = isThreadMuted(settings, thread.threadId);
+  const text = [
+    `Voice setup for ${threadName}`,
+    `Muted: ${muted ? "yes" : "no"}`,
+    `Provider: ${providerName}`,
+    `Voice: ${voiceName}`,
+    "",
+    "Examples:",
+    "/voice setup provider elevenlabs voice Rewinski-Fast",
+    "/voice setup provider supertonic voice F4F2Dynamic01",
+    "/voice mute",
+  ].join("\n");
+  return textResult(text, { thread: { ...thread, threadName }, threadSettings, effectiveTts: effectiveSettings.tts });
+}
+
+function normalizeProvider(provider) {
+  if (!provider) return "";
+  const value = String(provider).trim().toLowerCase();
+  if (["supertonic", "elevenlabs"].includes(value)) return value;
+  throw new Error(`Unsupported TTS provider: ${provider}`);
 }
 
 async function callTool(params, deps) {
@@ -356,6 +503,8 @@ async function callTool(params, deps) {
   if (params.name === "codex_voice_off") return voiceOff(args, deps);
   if (params.name === "codex_voice_status") return voiceStatus(args, deps);
   if (params.name === "codex_voice_say") return voiceSay(args, deps);
+  if (params.name === "codex_voice_mute") return voiceMute(args, deps);
+  if (params.name === "codex_voice_setup") return voiceSetup(args, deps);
   throw new Error(`Unknown Codex Voice tool: ${params.name}`);
 }
 

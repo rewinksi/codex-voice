@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -47,4 +50,38 @@ test("speakQueuedText serializes overlapping speech calls with a breath between 
   ]);
   assert.deepEqual(sleeps, [250]);
   resetSpeechQueueForTests();
+});
+
+test("speakQueuedText waits for a shared speech lock before speaking", async () => {
+  resetSpeechQueueForTests();
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "codex-voice-speech-lock-"));
+  const lockPath = path.join(tempDir, "tts.lock");
+  const events = [];
+  let sleepCount = 0;
+
+  try {
+    await mkdir(lockPath);
+
+    const run = speakQueuedText("locked speech", { ready: true }, { sideChannel: { speechGapMs: 0 } }, {
+      lockPath,
+      lockRetryMs: 10,
+      lockStaleMs: 60_000,
+      speaker: async (text) => {
+        events.push(`speak:${text}`);
+        return { spoken: true };
+      },
+      sleep: async () => {
+        sleepCount += 1;
+        if (sleepCount === 2) await rm(lockPath, { recursive: true, force: true });
+      },
+    });
+
+    await run;
+
+    assert.equal(sleepCount, 2);
+    assert.deepEqual(events, ["speak:locked speech"]);
+  } finally {
+    resetSpeechQueueForTests();
+    await rm(tempDir, { recursive: true, force: true });
+  }
 });

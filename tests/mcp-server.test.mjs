@@ -38,7 +38,14 @@ test("MCP tools/list exposes voice lifecycle tools", async () => {
   assert.equal(response.jsonrpc, "2.0");
   assert.deepEqual(
     response.result.tools.map((tool) => tool.name),
-    ["codex_voice_on", "codex_voice_off", "codex_voice_status", "codex_voice_say"],
+    [
+      "codex_voice_on",
+      "codex_voice_off",
+      "codex_voice_status",
+      "codex_voice_say",
+      "codex_voice_mute",
+      "codex_voice_setup",
+    ],
   );
 });
 
@@ -471,6 +478,109 @@ test("codex_voice_say speaks a concise main-thread summary for an active voice s
       JSON.parse(fetchCalls.find((call) => call.url.includes("/v1/tts")).options.body).text,
       "Tests passed; I am updating the docs now.",
     );
+  } finally {
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
+test("codex_voice_mute toggles current thread speech without stopping the listener", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-mcp-mute-"));
+  const played = [];
+  try {
+    await handleMcpRequest(
+      {
+        id: 60,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_on",
+          arguments: { threadId: "thread-muted", threadName: "Muted Thread" },
+        },
+      },
+      {
+        codexHome,
+        startListener: async () => ({ pid: 45678 }),
+        fetch: async () => ({ status: 404 }),
+      },
+    );
+
+    const muted = await handleMcpRequest(
+      {
+        id: 61,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_mute",
+          arguments: { threadId: "thread-muted", muted: true },
+        },
+      },
+      { codexHome },
+    );
+
+    assert.ifError(muted.error);
+    assert.match(muted.result.content[0].text, /Voice muted for Muted Thread/);
+
+    const say = await handleMcpRequest(
+      {
+        id: 62,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_say",
+          arguments: { threadId: "thread-muted", text: "Tests passed." },
+        },
+      },
+      {
+        codexHome,
+        fetch: async () => ({
+          ok: true,
+          arrayBuffer: async () => Buffer.from("audio").buffer,
+        }),
+        player: async (audioPath) => played.push(audioPath),
+      },
+    );
+
+    assert.ifError(say.error);
+    assert.equal(say.result.structuredContent.spoken.spoken, false);
+    assert.equal(say.result.structuredContent.spoken.reason, "voice-muted");
+    assert.equal(played.length, 0);
+
+    const registry = await loadSessions({ codexHome });
+    assert.equal(registry.sessions["thread-muted"].active, true);
+  } finally {
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
+test("codex_voice_setup stores per-thread ElevenLabs voice selection", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-mcp-setup-"));
+  try {
+    const response = await handleMcpRequest(
+      {
+        id: 63,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_setup",
+          arguments: {
+            threadId: "thread-voice",
+            threadName: "Voice Thread",
+            provider: "elevenlabs",
+            voiceName: "Rewinski-Fast",
+            voiceId: "voice-rewi",
+            model: "eleven_turbo_v2_5",
+          },
+        },
+      },
+      { codexHome },
+    );
+
+    assert.ifError(response.error);
+    assert.match(response.result.content[0].text, /Voice setup for Voice Thread/);
+    assert.match(response.result.content[0].text, /Provider: elevenlabs/);
+    assert.match(response.result.content[0].text, /Voice: Rewinski-Fast/);
+
+    const { settings } = await ensureSettings({ codexHome });
+    assert.equal(settings.threadSettings["thread-voice"].tts.provider, "elevenlabs");
+    assert.equal(settings.threadSettings["thread-voice"].tts.elevenlabs.voiceName, "Rewinski-Fast");
+    assert.equal(settings.threadSettings["thread-voice"].tts.elevenlabs.voiceId, "voice-rewi");
+    assert.equal(settings.threadSettings["thread-voice"].tts.elevenlabs.model, "eleven_turbo_v2_5");
   } finally {
     await rm(codexHome, { recursive: true, force: true });
   }

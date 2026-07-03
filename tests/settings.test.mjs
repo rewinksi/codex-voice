@@ -20,8 +20,10 @@ test("ensureSettings creates default settings under CODEX_HOME/voice", async () 
     assert.equal(result.settings.host, "127.0.0.1");
     assert.equal(result.settings.portBase, 6901);
     assert.equal(result.settings.tts.provider, "supertonic");
+    assert.equal(result.settings.tts.globalLock, true);
     assert.equal(result.settings.tts.supertonic.baseUrl, "http://127.0.0.1:7788");
     assert.equal(result.settings.tts.supertonic.voice, "F4F2Dynamic01");
+    assert.deepEqual(result.settings.threadSettings, {});
     assert.deepEqual(result.settings.stt, DEFAULT_SETTINGS.stt);
 
     const voiceDirMode = (await stat(path.join(codexHome, "voice"))).mode & 0o777;

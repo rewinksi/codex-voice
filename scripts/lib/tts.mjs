@@ -7,6 +7,7 @@ import { Readable } from "node:stream";
 
 import {
   DEFAULT_SETTINGS,
+  effectiveSettingsForThread,
   ensureSettings,
   loadVoiceEnv,
   saveSettings,
@@ -54,7 +55,9 @@ function publicElevenLabsConfig(config, hasApiKey) {
 export async function resolveTtsProvider(options = {}, deps = {}) {
   const fetchImpl = deps.fetch || globalThis.fetch;
   const env = deps.env || process.env;
-  const { settings } = await ensureSettings(options);
+  const { settings: persistedSettings } = await ensureSettings(options);
+  const hasThreadTts = Boolean(deps.threadId && persistedSettings.threadSettings?.[deps.threadId]?.tts);
+  const settings = effectiveSettingsForThread(persistedSettings, deps.threadId);
   const voiceEnv = await loadVoiceEnv(options);
   const requestedProvider = settings.tts?.provider || "supertonic";
 
@@ -86,10 +89,10 @@ export async function resolveTtsProvider(options = {}, deps = {}) {
   }
 
   const reachable = fetchImpl ? await probeBaseUrl(supertonic.baseUrl, fetchImpl) : false;
-  if (changed || settings.tts.provider !== "supertonic") {
-    settings.tts.provider = "supertonic";
-    settings.tts.supertonic = supertonic;
-    await saveSettings(options, settings);
+  if (!hasThreadTts && (changed || persistedSettings.tts.provider !== "supertonic")) {
+    persistedSettings.tts.provider = "supertonic";
+    persistedSettings.tts.supertonic = supertonic;
+    await saveSettings(options, persistedSettings);
   }
 
   if (!reachable) {

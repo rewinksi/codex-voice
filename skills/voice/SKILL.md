@@ -1,6 +1,6 @@
 ---
 name: voice
-description: Use when operating the Codex Voice plugin side-channel, including /voice on, /voice off, STT listener endpoints, and concise spoken project commentary.
+description: Use when operating the Codex Voice plugin side-channel, including /voice on, /voice off, /voice mute, /voice setup, STT listener endpoints, and concise milestone commentary.
 ---
 
 # Codex Voice Side-Channel
@@ -15,18 +15,23 @@ Codex Voice adds concise spoken summaries beside the main thread and a separate 
 - Use voice for state changes, blockers, short questions, and confirmation. Cheeky kiwi humour and the occasional well-placed swear are fine; long narration is not.
 - Never speak or print secrets.
 - Treat normal main-thread user messages as the primary command path.
-- When voice is active, call `codex_voice_say` after substantive main-thread replies with a concise spoken summary.
+- When voice is active, call `codex_voice_say` only after milestone-level main-thread replies: completed work, failed checks, blockers, installs/restarts, or decisions needing the user's attention.
+- Do not speak routine progress updates while work is running.
 - Treat the external STT endpoint as an intentional adjacent side-channel source, not the main command path and not an ambient microphone.
 - Side-channel acknowledgements should use only a varied configured phrase, not subject keywords or a status sentence.
-- Main-thread summaries and side-channel speech must share one speech lane; never let them talk over each other.
+- Main-thread summaries and side-channel speech must share one speech lane across active threads; never let them talk over each other.
 - Do not inject endpoint messages into the main thread or steer an active turn.
 
 ## Activation
 
 When the user runs `/voice on`, use the plugin MCP tool to start or reuse the current thread's voice session. The first visible line in the thread must be the listener endpoint.
 
-After `/voice on`, for each normal main-thread message the user sends, continue answering in the thread as usual and also call `codex_voice_say` with a short spoken summary. Use one quick sentence when possible. If the response contains code, logs, diffs, or detailed commands, speak only the high-level result and next action.
+After `/voice on`, continue answering normal main-thread messages in the thread as usual. Call `codex_voice_say` only for milestone summaries. Use one quick sentence when possible. If the response contains code, logs, diffs, or detailed commands, speak only the high-level result and next action.
 
 When the user runs `/voice off`, stop only the current thread's voice session.
 
 When the user runs `/voice status`, report the current thread's voice state without changing it.
+
+When the user runs `/voice mute` or `/voice unmute`, call `codex_voice_mute` for the current thread. Muting must silence spoken output without stopping the listener.
+
+When the user runs `/voice setup`, call `codex_voice_setup`. Show the returned setup panel, and pass thread-local provider or voice choices when the user supplies them.

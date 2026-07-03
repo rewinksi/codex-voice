@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 import { recordSideChannelMessage } from "./lib/side-channel.mjs";
 import { respondToSideChannel } from "./lib/side-channel-response.mjs";
+import { ensureSettings } from "./lib/settings.mjs";
 import { extractTranscriptText } from "./lib/stt.mjs";
 import { startThreadWatcher } from "./lib/thread-watch.mjs";
 
@@ -54,10 +55,17 @@ export function createVoiceServer({
   settings,
   codexHome,
   recorder = recordSideChannelMessage,
+  settingsLoader,
   sideChannelResponder = ({ session, settings, text }) => {
     return respondToSideChannel({ codexHome }, session, settings, text);
   },
 }) {
+  async function currentSettings() {
+    if (settingsLoader) return settingsLoader();
+    if (codexHome) return (await ensureSettings({ codexHome })).settings;
+    return settings;
+  }
+
   return http.createServer(async (request, response) => {
     const url = new URL(request.url || "/", `http://${request.headers.host || "127.0.0.1"}`);
 
@@ -86,7 +94,8 @@ export function createVoiceServer({
     }
 
     if (request.method === "POST" && url.pathname === "/v1/chat/completions") {
-      if (!isAuthorized(request, settings)) {
+      const requestSettings = await currentSettings();
+      if (!isAuthorized(request, requestSettings)) {
         sendJson(response, 401, { error: { message: "Unauthorized", type: "authentication_error" } });
         return;
       }
@@ -95,7 +104,7 @@ export function createVoiceServer({
         const payload = await readJson(request);
         const text = extractTranscriptText(payload);
         await recorder({ codexHome }, session, text);
-        Promise.resolve(sideChannelResponder({ session, settings, codexHome, text })).catch(() => {});
+        Promise.resolve(sideChannelResponder({ session, settings: requestSettings, codexHome, text })).catch(() => {});
 
         sendJson(response, 200, openAiAck());
       } catch (error) {

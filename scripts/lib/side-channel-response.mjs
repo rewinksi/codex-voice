@@ -5,16 +5,23 @@ import path from "node:path";
 
 import { speakQueuedText, resetSpeechQueueForTests } from "./speech-queue.mjs";
 import { resolveTtsProvider } from "./tts.mjs";
-import { loadVoiceEnv } from "./settings.mjs";
+import { effectiveSettingsForThread, isThreadMuted, loadVoiceEnv } from "./settings.mjs";
+import { getSpeechLockPath } from "./paths.mjs";
 import { findRolloutPath, summarizeForSpeech } from "./thread-watch.mjs";
 
 export async function respondToSideChannel(options = {}, session, settings, text, deps = {}) {
-  const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env });
+  if (isThreadMuted(settings, session.threadId)) {
+    return { spoken: false, reason: "voice-muted" };
+  }
+
+  const effectiveSettings = effectiveSettingsForThread(settings, session.threadId);
+  const tts = await resolveTtsProvider(options, { fetch: deps.fetch, env: deps.env, threadId: session.threadId });
   const speechDeps = {
     fetch: deps.fetch,
     player: deps.player,
     streamPlayer: deps.streamPlayer,
     sleep: deps.sleep,
+    lockPath: getSpeechLockPath(options),
   };
   const responsePromise = generateSideChannelResponse(session, settings, text, {
     ...deps,
@@ -22,14 +29,14 @@ export async function respondToSideChannel(options = {}, session, settings, text
   });
 
   if (settings.sideChannel?.speakImmediateAck !== false) {
-    await speakSideChannelText(buildSideChannelAckText(text, settings, { random: deps.random }), tts, settings, speechDeps);
+    await speakSideChannelText(buildSideChannelAckText(text, effectiveSettings, { random: deps.random }), tts, effectiveSettings, speechDeps);
   }
 
   const responseText = await responsePromise;
-  const spokenText = summarizeForSpeech(responseText, settings.sideChannel?.maxResponseChars || 260);
+  const spokenText = summarizeForSpeech(responseText, effectiveSettings.sideChannel?.maxResponseChars || 260);
   if (!spokenText) return { spoken: false, reason: "empty-response" };
 
-  const spoken = await speakSideChannelText(spokenText, tts, settings, speechDeps);
+  const spoken = await speakSideChannelText(spokenText, tts, effectiveSettings, speechDeps);
   return { ...spoken, text: spokenText };
 }
 
