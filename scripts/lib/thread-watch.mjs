@@ -61,6 +61,17 @@ export function summarizeForSpeech(text, maxChars = 260) {
   return `${clipped.slice(0, lastSpace > 80 ? lastSpace : maxChars).trim()}...`;
 }
 
+export function shouldSpeakMainThreadSummary(text, settings = {}) {
+  const summarySettings = settings.mainThreadSummary || {};
+  const mode = String(summarySettings.mode || "milestones").toLowerCase();
+  if (["off", "false", "none", "mute", "muted"].includes(mode)) return false;
+  if (["all", "everything", "verbose"].includes(mode)) return true;
+
+  const cleaned = summarizeForSpeech(text, Number(summarySettings.maxChars || 140));
+  if (!cleaned) return false;
+  return /\b(done|fixed|complete|completed|ready|blocked|failed|failure|error|issue|tests?\s+(?:pass|passed|passing|fail|failed)|passing|committed|pushed|installed|restarted|deployed|released|verified|validation\s+passed|suite\s+(?:pass|passed|green)|green)\b/i.test(cleaned);
+}
+
 export async function findRolloutPath(options = {}, threadId) {
   const sessionsDir = path.join(getCodexHome(options), "sessions");
   const suffix = `${threadId}.jsonl`;
@@ -111,7 +122,9 @@ export async function startThreadWatcher({ session, codexHome, intervalMs = 350,
       offset = result.offset;
       buffer = result.buffer;
       const candidates = result.lines
-        .map((line) => summarizeForSpeech(extractAssistantSpeechText(line), maxChars))
+        .map((line) => extractAssistantSpeechText(line))
+        .filter((text) => shouldSpeakMainThreadSummary(text, settings))
+        .map((text) => summarizeForSpeech(text, maxChars))
         .filter(Boolean);
       if (candidates.length) {
         pendingText = candidates.at(-1);

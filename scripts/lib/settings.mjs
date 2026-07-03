@@ -49,6 +49,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     },
   },
   mainThreadSummary: {
+    mode: "milestones",
     maxChars: 140,
     settleMs: 450,
   },

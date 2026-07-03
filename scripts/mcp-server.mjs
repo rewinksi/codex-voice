@@ -2,7 +2,7 @@
 import { createInterface } from "node:readline";
 import { spawn, execFile } from "node:child_process";
 import { openSync, closeSync } from "node:fs";
-import { mkdir, realpath, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -134,7 +134,7 @@ export async function resolveThreadByIdFromState(threadId, deps = {}) {
   const codexHome = deps.codexHome || process.env.CODEX_HOME || path.join(process.env.HOME, ".codex");
   const dbPath = path.join(codexHome, "state_5.sqlite");
   const sql = `select id,title,cwd from threads where id = ${quoteSql(threadId)} limit 1;`;
-  return new Promise((resolve) => {
+  const fromState = await new Promise((resolve) => {
     execFile("sqlite3", ["-separator", "\t", dbPath, sql], { timeout: 2000 }, (error, stdout) => {
       if (error || !stdout.trim()) {
         resolve(null);
@@ -148,6 +148,26 @@ export async function resolveThreadByIdFromState(threadId, deps = {}) {
       resolve({ threadId: resolvedThreadId, threadName, cwd: threadCwd || "" });
     });
   });
+  if (!fromState) return null;
+
+  const indexedName = await resolveThreadNameFromSessionIndex(threadId, deps);
+  return { ...fromState, threadName: indexedName || fromState.threadName };
+}
+
+export async function resolveThreadNameFromSessionIndex(threadId, deps = {}) {
+  const codexHome = deps.codexHome || process.env.CODEX_HOME || path.join(process.env.HOME, ".codex");
+  const indexPath = path.join(codexHome, "session_index.jsonl");
+  try {
+    const lines = (await readFile(indexPath, "utf8")).trim().split(/\r?\n/);
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const entry = JSON.parse(lines[index]);
+      const threadName = String(entry.thread_name || "").trim();
+      if (entry.id === threadId && threadName && threadName !== threadId) return threadName;
+    }
+  } catch {
+    // Codex Desktop may not have created a session index yet.
+  }
+  return null;
 }
 
 export async function resolveThreadFromState(cwd, deps = {}) {
@@ -161,7 +181,7 @@ export async function resolveThreadFromState(cwd, deps = {}) {
   }
   const cwdFilter = [...candidates].map(quoteSql).join(",");
   const sql = `select id,title,cwd from threads where archived=0 and cwd in (${cwdFilter}) order by recency_at_ms desc limit 1;`;
-  return new Promise((resolve) => {
+  const fromState = await new Promise((resolve) => {
     execFile("sqlite3", ["-separator", "\t", dbPath, sql], { timeout: 2000 }, (error, stdout) => {
       if (error || !stdout.trim()) {
         resolve(null);
@@ -171,6 +191,10 @@ export async function resolveThreadFromState(cwd, deps = {}) {
       resolve({ threadId, threadName: threadName || threadId, cwd: threadCwd || cwd });
     });
   });
+  if (!fromState) return null;
+
+  const indexedName = await resolveThreadNameFromSessionIndex(fromState.threadId, deps);
+  return { ...fromState, threadName: indexedName || fromState.threadName };
 }
 
 async function defaultStartListener({ options, session, settings }) {
@@ -232,14 +256,14 @@ async function voiceOn(args, deps) {
       refreshed = await setSessionPid(options, thread.threadId, started.pid ?? null);
       const text = [
         `Voice listener endpoint: ${refreshed.endpoint}`,
-        `Voice refreshed for ${refreshed.threadName}`,
+        "Voice active",
         `TTS provider: ${tts.provider} (${tts.ready ? "ready" : "needs setup"})`,
       ].join("\n");
       return textResult(text, { session: refreshed, tts, refreshed: true });
     }
     const text = [
       `Voice listener endpoint: ${current.endpoint}`,
-      `Voice already online for ${current.threadName}`,
+      "Voice active",
       `TTS provider: ${tts.provider} (${tts.ready ? "ready" : "needs setup"})`,
     ].join("\n");
     return textResult(text, { session: current, tts, reused: true });
@@ -249,7 +273,7 @@ async function voiceOn(args, deps) {
   const started = await (deps.startListener || defaultStartListener)({ options, session, settings });
   session = await setSessionPid(options, thread.threadId, started.pid ?? null);
 
-  const onlineText = `Voice online for ${session.threadName}`;
+  const onlineText = "Voice active";
   if (settings.tts?.speakOnOnline && tts.ready) {
     await speakText(onlineText, tts, { fetch: deps.fetch, player: deps.player });
   }

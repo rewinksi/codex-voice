@@ -131,7 +131,7 @@ test("startThreadWatcher speaks newly appended assistant messages", async () => 
         payload: {
           type: "message",
           role: "assistant",
-          content: [{ type: "output_text", text: "Watcher spoke this." }],
+          content: [{ type: "output_text", text: "Tests passed. Watcher spoke this." }],
         },
       })}\n`,
     );
@@ -139,6 +139,135 @@ test("startThreadWatcher speaks newly appended assistant messages", async () => 
     await new Promise((resolve) => setTimeout(resolve, 150));
     watcher.stop();
     assert.equal(spoken.length, 1);
+  } finally {
+    resetSpeechQueueForTests();
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
+test("startThreadWatcher skips routine progress chatter by default", async () => {
+  resetSpeechQueueForTests();
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-watch-milestones-"));
+  const threadId = "thread-watch-milestones";
+  const rolloutDir = path.join(codexHome, "sessions", "2026", "07", "01");
+  const rolloutPath = path.join(rolloutDir, `rollout-2026-07-01T00-00-00-${threadId}.jsonl`);
+  const spokenTexts = [];
+
+  try {
+    await mkdir(rolloutDir, { recursive: true });
+    await writeFile(rolloutPath, `${JSON.stringify({ type: "session_meta", payload: { id: threadId } })}\n`);
+
+    const { settings } = await ensureSettings({ codexHome });
+    settings.tts.provider = "elevenlabs";
+    settings.tts.elevenlabs.voiceName = "Rachel";
+    settings.tts.elevenlabs.voiceId = "voice-1";
+    settings.tts.elevenlabs.streaming = false;
+    await saveSettings({ codexHome }, settings);
+    await writeVoiceEnv({ codexHome }, { ELEVENLABS_API_KEY: "test-key" });
+
+    const watcher = await startThreadWatcher({
+      session: { threadId, threadName: "Watch Test" },
+      codexHome,
+      intervalMs: 15,
+      settleMs: 30,
+      deps: {
+        fetch: async (url, options = {}) => {
+          if (String(url).includes("/v1/text-to-speech/voice-1")) {
+            spokenTexts.push(JSON.parse(options.body).text);
+          }
+          return {
+            ok: true,
+            arrayBuffer: async () => Buffer.from("audio").buffer,
+          };
+        },
+        player: async () => {},
+      },
+    });
+
+    assert.equal(watcher.started, true);
+    await appendFile(
+      rolloutPath,
+      `${JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "I’m reading the files and checking the context." }],
+        },
+      })}\n${JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "Tests passed. Ready for the next step." }],
+        },
+      })}\n`,
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    watcher.stop();
+    assert.deepEqual(spokenTexts, ["Tests passed. Ready for the next step."]);
+  } finally {
+    resetSpeechQueueForTests();
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
+test("startThreadWatcher stays silent for chatter-only progress by default", async () => {
+  resetSpeechQueueForTests();
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-watch-chatter-only-"));
+  const threadId = "thread-watch-chatter-only";
+  const rolloutDir = path.join(codexHome, "sessions", "2026", "07", "01");
+  const rolloutPath = path.join(rolloutDir, `rollout-2026-07-01T00-00-00-${threadId}.jsonl`);
+  const spokenTexts = [];
+
+  try {
+    await mkdir(rolloutDir, { recursive: true });
+    await writeFile(rolloutPath, `${JSON.stringify({ type: "session_meta", payload: { id: threadId } })}\n`);
+
+    const { settings } = await ensureSettings({ codexHome });
+    settings.tts.provider = "elevenlabs";
+    settings.tts.elevenlabs.voiceName = "Rachel";
+    settings.tts.elevenlabs.voiceId = "voice-1";
+    settings.tts.elevenlabs.streaming = false;
+    await saveSettings({ codexHome }, settings);
+    await writeVoiceEnv({ codexHome }, { ELEVENLABS_API_KEY: "test-key" });
+
+    const watcher = await startThreadWatcher({
+      session: { threadId, threadName: "Watch Test" },
+      codexHome,
+      intervalMs: 15,
+      settleMs: 30,
+      deps: {
+        fetch: async (url, options = {}) => {
+          if (String(url).includes("/v1/text-to-speech/voice-1")) {
+            spokenTexts.push(JSON.parse(options.body).text);
+          }
+          return {
+            ok: true,
+            arrayBuffer: async () => Buffer.from("audio").buffer,
+          };
+        },
+        player: async () => {},
+      },
+    });
+
+    assert.equal(watcher.started, true);
+    await appendFile(
+      rolloutPath,
+      `${JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "I’m reading the files and checking the context." }],
+        },
+      })}\n`,
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    watcher.stop();
+    assert.deepEqual(spokenTexts, []);
   } finally {
     resetSpeechQueueForTests();
     await rm(codexHome, { recursive: true, force: true });
@@ -193,21 +322,21 @@ test("startThreadWatcher coalesces rapid assistant messages and speaks only the 
         payload: {
           type: "message",
           role: "assistant",
-          content: [{ type: "output_text", text: "First stale update." }],
+          content: [{ type: "output_text", text: "I’m checking files." }],
         },
       })}\n${JSON.stringify({
         type: "response_item",
         payload: {
           type: "message",
           role: "assistant",
-          content: [{ type: "output_text", text: "Latest useful update." }],
+          content: [{ type: "output_text", text: "Tests passed. Latest useful update." }],
         },
       })}\n`,
     );
 
     await new Promise((resolve) => setTimeout(resolve, 180));
     watcher.stop();
-    assert.deepEqual(spokenTexts, ["Latest useful update."]);
+    assert.deepEqual(spokenTexts, ["Tests passed. Latest useful update."]);
   } finally {
     resetSpeechQueueForTests();
     await rm(codexHome, { recursive: true, force: true });

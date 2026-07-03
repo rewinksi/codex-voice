@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -107,7 +107,7 @@ test("codex_voice_on resolves canonical cwd aliases from Codex state", async () 
 
     assert.equal(response.jsonrpc, "2.0");
     assert.ifError(response.error);
-    assert.match(response.result.content[0].text, /Voice online for Canonical/);
+    assert.match(response.result.content[0].text, /Voice active/);
   } finally {
     await rm(codexHome, { recursive: true, force: true });
     await rm(project, { recursive: true, force: true });
@@ -146,12 +146,62 @@ test("codex_voice_on resolves the sidebar title from Codex state when threadId i
 
     assert.equal(response.jsonrpc, "2.0");
     assert.ifError(response.error);
-    assert.match(response.result.content[0].text, /Voice online for Codex Voice/);
+    assert.match(response.result.content[0].text, /Voice active/);
     assert.doesNotMatch(response.result.content[0].text, /019f1cb4/);
 
     const registry = await loadSessions({ codexHome });
     assert.equal(registry.sessions["019f1cb4-5f93-7582-a92c-595f1d1ea0fe"].threadName, "Codex Voice");
     assert.equal(registry.sessions["019f1cb4-5f93-7582-a92c-595f1d1ea0fe"].cwd, "/tmp/codex-voice");
+  } finally {
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
+test("codex_voice_on prefers session_index short thread name over long Codex state title", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-mcp-session-index-title-"));
+  try {
+    const dbPath = path.join(codexHome, "state_5.sqlite");
+    await sqlite([
+      dbPath,
+      "create table threads (id text primary key, title text not null, cwd text not null, archived integer not null, recency_at_ms integer not null);",
+    ]);
+    await sqlite([
+      dbPath,
+      "insert into threads values ('thread-with-long-title', 'Work only in /a/very/long/path. Read every instruction file before editing. Then inspect git status and do not say all this aloud.', '/tmp/long-title', 0, 1);",
+    ]);
+    await writeFile(
+      path.join(codexHome, "session_index.jsonl"),
+      `${JSON.stringify({
+        id: "thread-with-long-title",
+        thread_name: "Inspect SynapSense workspace",
+        updated_at: "2026-07-03T08:00:00.000Z",
+      })}\n`,
+    );
+
+    const response = await handleMcpRequest(
+      {
+        id: 10,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_on",
+          arguments: { threadId: "thread-with-long-title" },
+        },
+      },
+      {
+        codexHome,
+        env: {},
+        startListener: async () => ({ pid: 56790 }),
+        fetch: async () => ({ status: 404 }),
+      },
+    );
+
+    assert.equal(response.jsonrpc, "2.0");
+    assert.ifError(response.error);
+    assert.match(response.result.content[0].text, /Voice active/);
+    assert.doesNotMatch(response.result.content[0].text, /Work only in/);
+
+    const registry = await loadSessions({ codexHome });
+    assert.equal(registry.sessions["thread-with-long-title"].threadName, "Inspect SynapSense workspace");
   } finally {
     await rm(codexHome, { recursive: true, force: true });
   }
@@ -186,7 +236,7 @@ test("codex_voice_on allocates a session, starts listener, and returns endpoint 
 
     const text = response.result.content[0].text;
     assert.ok(text.startsWith("Voice listener endpoint: http://127.0.0.1:6901/v1/chat/completions"));
-    assert.match(text, /Voice online for Alpha/);
+    assert.match(text, /Voice active/);
     assert.equal(starts.length, 1);
 
     const registry = await loadSessions({ codexHome });
@@ -237,7 +287,7 @@ test("codex_voice_on reuses an already active listener for the same thread", asy
 
     assert.ifError(second.error);
     assert.equal(starts, 1);
-    assert.match(second.result.content[0].text, /Voice already online for Alpha/);
+    assert.match(second.result.content[0].text, /Voice active/);
   } finally {
     await rm(codexHome, { recursive: true, force: true });
   }
@@ -296,7 +346,7 @@ test("codex_voice_on refreshes active listeners when settings change", async () 
     assert.ifError(second.error);
     assert.equal(startedSettings.length, 2);
     assert.deepEqual(stoppedPids, [101]);
-    assert.match(second.result.content[0].text, /Voice refreshed for Alpha/);
+    assert.match(second.result.content[0].text, /Voice active/);
     assert.deepEqual(startedSettings.at(-1).sideChannel.acknowledgementWords, ["Sweet as"]);
 
     const registry = await loadSessions({ codexHome });
@@ -457,7 +507,7 @@ test("codex_voice_on resolves thread id from Codex state when cwd is provided", 
     );
 
     assert.ifError(response.error);
-    assert.match(response.result.content[0].text, /Voice online for Newest/);
+    assert.match(response.result.content[0].text, /Voice active/);
 
     const registry = await loadSessions({ codexHome });
     assert.equal(registry.sessions["new-thread"].port, 6901);

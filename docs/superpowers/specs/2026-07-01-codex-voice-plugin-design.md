@@ -29,7 +29,7 @@ Voice listener endpoint: http://127.0.0.1:<port>/v1/chat/completions
 After the endpoint is visible, Codex may print concise setup status and speak:
 
 ```text
-Voice online for <thread name>
+Voice active
 ```
 
 While voice is active, Codex should answer normal main-thread user messages in the thread as usual and call `codex_voice_say` with a short spoken summary after substantive replies. Spoken summaries must avoid code, logs, diffs, long command output, and secrets.
@@ -95,6 +95,7 @@ If `settings.json` does not exist, `/voice on` creates it with safe defaults:
     }
   },
   "mainThreadSummary": {
+    "mode": "milestones",
     "maxChars": 140,
     "settleMs": 450
   },
@@ -195,7 +196,7 @@ Main-thread path:
 
 - Normal main-thread messages are handled by Codex normally.
 - While voice is active, Codex calls `codex_voice_say` to speak a concise summary of the main-thread reply.
-- The automatic thread watcher coalesces rapid assistant output and speaks only the newest useful summary instead of queueing stale updates.
+- The automatic thread watcher coalesces rapid assistant output and speaks only milestone summaries by default instead of narrating every progress note.
 - Side-channel speech and main-thread watcher speech use a shared queue, with a short breath between utterances, so they do not overlap.
 
 Implementation must prove that endpoint STT does not call `turn/start`, `turn/steer`, or any Codex app-server injection path.
@@ -239,3 +240,9 @@ Minimum verification before completion:
 - Listener health endpoints work.
 - `codex_voice_say` speaks summaries only for active voice sessions.
 - `/voice off` stops the listener and releases the active session.
+
+## Queued Follow-Ups
+
+- Add `/voice mute` as a standard accessible setting.
+- Add a cross-thread TTS activity lock so multiple active threads never speak over each other.
+- Add `/voice setup` for per-thread TTS configuration, including easy voice selection so each active thread can have a distinct voice.
