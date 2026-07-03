@@ -114,6 +114,49 @@ test("codex_voice_on resolves canonical cwd aliases from Codex state", async () 
   }
 });
 
+test("codex_voice_on resolves the sidebar title from Codex state when threadId is provided", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-mcp-title-by-id-"));
+  try {
+    const dbPath = path.join(codexHome, "state_5.sqlite");
+    await sqlite([
+      dbPath,
+      "create table threads (id text primary key, title text not null, cwd text not null, archived integer not null, recency_at_ms integer not null);",
+    ]);
+    await sqlite([
+      dbPath,
+      "insert into threads values ('019f1cb4-5f93-7582-a92c-595f1d1ea0fe', 'Codex Voice', '/tmp/codex-voice', 0, 1);",
+    ]);
+
+    const response = await handleMcpRequest(
+      {
+        id: 9,
+        method: "tools/call",
+        params: {
+          name: "codex_voice_on",
+          arguments: { threadId: "019f1cb4-5f93-7582-a92c-595f1d1ea0fe" },
+        },
+      },
+      {
+        codexHome,
+        env: {},
+        startListener: async () => ({ pid: 56789 }),
+        fetch: async () => ({ status: 404 }),
+      },
+    );
+
+    assert.equal(response.jsonrpc, "2.0");
+    assert.ifError(response.error);
+    assert.match(response.result.content[0].text, /Voice online for Codex Voice/);
+    assert.doesNotMatch(response.result.content[0].text, /019f1cb4/);
+
+    const registry = await loadSessions({ codexHome });
+    assert.equal(registry.sessions["019f1cb4-5f93-7582-a92c-595f1d1ea0fe"].threadName, "Codex Voice");
+    assert.equal(registry.sessions["019f1cb4-5f93-7582-a92c-595f1d1ea0fe"].cwd, "/tmp/codex-voice");
+  } finally {
+    await rm(codexHome, { recursive: true, force: true });
+  }
+});
+
 test("codex_voice_on allocates a session, starts listener, and returns endpoint first", async () => {
   const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-mcp-on-"));
   const starts = [];
@@ -350,7 +393,7 @@ test("codex_voice_say speaks a concise main-thread summary for an active voice s
           name: "codex_voice_say",
           arguments: {
             threadId: "thread-a",
-            text: "Tests passed; I am updating the docs now.",
+            text: "**Tests passed**; I am updating the *docs* now.",
           },
         },
       },

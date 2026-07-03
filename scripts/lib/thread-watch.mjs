@@ -35,6 +35,13 @@ export function summarizeForSpeech(text, maxChars = 260) {
     .replace(/^::[^\n]+$/gm, " ")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s*(.+)$/gm, (_, heading) => {
+      const trimmed = heading.trim();
+      return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+    })
+    .replace(/^\s{0,3}>\s?/gm, "")
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, "")
+    .replace(/[*_~]+/g, "")
     .replace(/\s+/g, " ")
     .trim();
 

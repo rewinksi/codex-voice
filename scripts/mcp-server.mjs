@@ -14,6 +14,7 @@ import {
   releaseSession,
   setSessionPid,
 } from "./lib/sessions.mjs";
+import { summarizeForSpeech } from "./lib/thread-watch.mjs";
 import { resolveTtsProvider, speakText } from "./lib/tts.mjs";
 
 const SERVER_INFO = {
@@ -92,9 +93,19 @@ function errorResponse(id, error) {
 async function resolveThread(args = {}, deps = {}) {
   const env = deps.env || process.env;
   if (args.threadId) {
+    if (!args.threadName || args.threadName === args.threadId) {
+      const fromState = await resolveThreadByIdFromState(args.threadId, deps);
+      if (fromState) {
+        return {
+          threadId: args.threadId,
+          threadName: fromState.threadName,
+          cwd: args.cwd || fromState.cwd || "",
+        };
+      }
+    }
     return {
       threadId: args.threadId,
-      threadName: args.threadName || args.threadId,
+      threadName: args.threadName || "this thread",
       cwd: args.cwd || "",
     };
   }
@@ -117,6 +128,26 @@ async function resolveThread(args = {}, deps = {}) {
 
 function quoteSql(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+export async function resolveThreadByIdFromState(threadId, deps = {}) {
+  const codexHome = deps.codexHome || process.env.CODEX_HOME || path.join(process.env.HOME, ".codex");
+  const dbPath = path.join(codexHome, "state_5.sqlite");
+  const sql = `select id,title,cwd from threads where id = ${quoteSql(threadId)} limit 1;`;
+  return new Promise((resolve) => {
+    execFile("sqlite3", ["-separator", "\t", dbPath, sql], { timeout: 2000 }, (error, stdout) => {
+      if (error || !stdout.trim()) {
+        resolve(null);
+        return;
+      }
+      const [resolvedThreadId, threadName, threadCwd] = stdout.trim().split("\t");
+      if (resolvedThreadId !== threadId || !threadName || threadName === threadId) {
+        resolve(null);
+        return;
+      }
+      resolve({ threadId: resolvedThreadId, threadName, cwd: threadCwd || "" });
+    });
+  });
 }
 
 export async function resolveThreadFromState(cwd, deps = {}) {
@@ -273,7 +304,7 @@ async function voiceOff(args, deps) {
 }
 
 async function voiceSay(args, deps) {
-  const text = String(args.text || "").trim();
+  const text = summarizeForSpeech(args.text || "", 260);
   if (!text) throw new Error("codex_voice_say requires non-empty text");
 
   const options = { codexHome: deps.codexHome };

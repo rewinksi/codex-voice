@@ -64,6 +64,22 @@ The full test suite is passing and the listener is restarted.
   assert.equal(summary, "Done. I updated the watcher. The full test suite is passing and the listener is restarted.");
 });
 
+test("summarizeForSpeech strips markdown formatting tokens before speaking", () => {
+  const summary = summarizeForSpeech(`
+## **Done**
+
+- Fixed *voice* summaries.
+- **No asterisks** should be spoken.
+
+> _Ship it._
+`, 200);
+
+  assert.equal(summary.includes("*"), false);
+  assert.equal(summary.includes("#"), false);
+  assert.equal(summary.includes("_"), false);
+  assert.equal(summary, "Done. Fixed voice summaries. No asterisks should be spoken. Ship it.");
+});
+
 test("startThreadWatcher speaks newly appended assistant messages", async () => {
   resetSpeechQueueForTests();
   const codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-voice-watch-"));
