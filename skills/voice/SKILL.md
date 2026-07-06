@@ -24,7 +24,16 @@ Codex Voice adds concise spoken summaries beside the main thread and a separate 
 
 ## Activation
 
-When the user runs `/voice on`, use the plugin MCP tool to start or reuse the current thread's voice session. The first visible line in the thread must be the listener endpoint.
+When the user runs `/voice on`, treat it as an actionable native plugin command. Do not refuse just because the `codex_voice_*` tools are not already visible in the current tool list. A hidden or unloaded tool surface is an activation task, not proof that voice is unavailable.
+
+Activation order:
+
+1. Use the exposed `codex_voice_on` MCP tool if it is already available.
+2. If the tool is not visible and tool discovery is available, search for `codex_voice_on`, `codex-voice`, or `/voice`, then call the discovered tool.
+3. If discovery is unavailable but this command file is loaded, assume the plugin is installed and try to activate through the configured Codex Voice MCP server before asking the user to reinstall or start a new thread.
+4. Only report that voice cannot be activated after checking the actual available tools or plugin installation state.
+
+The first visible line in the thread must be the listener endpoint.
 
 After `/voice on`, continue answering normal main-thread messages in the thread as usual. Call `codex_voice_say` only for milestone summaries. Use one quick sentence when possible. If the response contains code, logs, diffs, or detailed commands, speak only the high-level result and next action.
 

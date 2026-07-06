@@ -38,6 +38,17 @@ codex plugin add codex-voice@codex-voice
 
 Start a new Codex thread after installing or reinstalling so the `/voice` command, skill, and MCP tools are loaded into that thread.
 
+## Agent Activation Behavior
+
+`/voice on` is intended to be boringly native. If a fresh Codex thread does not already show the `codex_voice_*` tools in the active tool list, the agent should treat that as a discovery step, not a hard limitation:
+
+1. Search/discover tools for `codex_voice_on`, `codex-voice`, or `/voice`.
+2. Call the discovered `codex_voice_on` tool.
+3. Print `Voice listener endpoint: <endpoint>` as the first visible line.
+4. Keep the rest concise.
+
+An agent should only say voice cannot be activated after checking the real plugin/tool state. "The tool is not exposed in this session" is a prompt to discover or reload the Codex Voice plugin surface, not an excuse to stop.
+
 ## Commands
 
 - `/voice on`

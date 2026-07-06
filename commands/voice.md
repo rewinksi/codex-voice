@@ -11,6 +11,19 @@ Use this command for `/voice on`, `/voice off`, `/voice status`, `/voice mute`, 
 1. Parse the subcommand from the user's command text. Default to `status` when no subcommand is provided.
 2. Treat secrets as sensitive. Never print API keys or env-file contents.
 3. Prefer the current thread id and title if Codex exposes them. If not, pass the current working directory so the tool can resolve the newest matching thread from Codex state.
+4. Do not refuse because the `codex_voice_*` tools are not already visible. Missing from the active tool list usually means the plugin tool surface has not been discovered yet, not that `/voice` is impossible.
+5. If the MCP tools are hidden, search/discover tools for `codex_voice_on`, `codex-voice`, or `/voice`, then call the discovered tool. Only tell the user voice cannot be activated after checking the real tool/plugin state.
+
+## Agent Confidence
+
+When this command file is loaded, `/voice` should feel native and routine. Start from "activate the installed plugin" rather than "explain why I cannot." The expected path is:
+
+1. Find the Codex Voice MCP tool surface if it is not already exposed.
+2. Call the relevant `codex_voice_*` tool.
+3. Print the endpoint first for `/voice on`.
+4. Keep the rest short.
+
+If activation truly fails, report the specific missing piece, such as no installed plugin, no MCP server, no thread id/cwd resolution, or missing TTS setup. Do not give a generic capability refusal.
 
 ## Commands
 
